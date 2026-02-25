@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import '../common/common.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -30,9 +33,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (credential.user != null) {
         await credential.user!.updateDisplayName(_nameController.text.trim());
-        // In real app, call backend /users to upsert user profile
+        // Upsert user in backend database
+        final token = await credential.user!.getIdToken();
+        await http.post(
+          Uri.parse('${CommonData.backendUrl}/users'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
+          Navigator.pushReplacementNamed(context, '/subscribe');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -40,6 +48,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message ?? 'Registration failed')),
         );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final googleUser = await GoogleSignIn(
+        clientId: CommonData.googleClientId,
+      ).signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      if (userCredential.user != null) {
+        final token = await userCredential.user!.getIdToken();
+        await http.post(
+          Uri.parse('${CommonData.backendUrl}/users'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (mounted) Navigator.pushReplacementNamed(context, '/subscribe');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Google Sign-Up failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -119,18 +164,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 32),
                           _isLoading
-                              ? const CircularProgressIndicator()
-                              : SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _register,
-                                    child: const Text('CREATE ACCOUNT'),
-                                  ),
+                              ? const Center(child: CircularProgressIndicator())
+                              : Column(
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: _register,
+                                        child: const Text('CREATE ACCOUNT'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        const Expanded(child: Divider()),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                          ),
+                                          child: Text(
+                                            'OR',
+                                            style: TextStyle(
+                                              color: Colors.grey.shade500,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        const Expanded(child: Divider()),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _signUpWithGoogle,
+                                        icon: Image.network(
+                                          'https://www.google.com/favicon.ico',
+                                          height: 18,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(Icons.login, size: 18),
+                                        ),
+                                        label: const Text(
+                                          'SIGN UP WITH GOOGLE',
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                          side: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                           const SizedBox(height: 16),
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: const Text('ALREADY HAVE AN ACCOUNT? LOGIN'),
+                            child: const Text('BACK TO LOGIN'),
                           ),
                         ],
                       ),

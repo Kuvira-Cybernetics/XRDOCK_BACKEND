@@ -113,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         children: [
                           Text(
-                            'AUTHENTICATION',
+                            'SIGN IN',
                             style: Theme.of(
                               context,
                             ).textTheme.titleLarge?.copyWith(fontSize: 18),
@@ -158,11 +158,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                       width: double.infinity,
                                       child: ElevatedButton(
                                         onPressed: _signInWithEmail,
-                                        child: const Text('INITIALIZE ACCESS'),
+                                        child: const Text('LOGIN'),
                                       ),
                                     ),
                                     const SizedBox(height: 16),
-                                    const Text('OR CONNECT VIA'),
+                                    const Text('OR'),
                                     const SizedBox(height: 16),
                                     SizedBox(
                                       width: double.infinity,
@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           size: 32,
                                         ),
                                         label: const Text(
-                                          'Sign-In with GOOGLE',
+                                          'Sign-In with Google',
                                         ),
                                         style: OutlinedButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
@@ -201,9 +201,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   );
                                 },
-                                child: const Text('REGISTER SYSTEM'),
+                                child: const Text('REGISTER'),
                               ),
                             ],
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pushNamed(context, '/subscribe'),
+                            child: const Text('VIEW SUBSCRIPTION PLANS'),
                           ),
                         ],
                       ),

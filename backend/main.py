@@ -72,6 +72,15 @@ async def upsert_user(
     await session.refresh(db_user)
     return db_user
 
+@app.get("/issues", response_model=List[Issue])
+async def get_all_issues(
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(verify_firebase_token)
+):
+    statement = select(Issue).order_by(Issue.id.desc())
+    result = await session.execute(statement)
+    return result.scalars().all()
+
 @app.get("/issues/{project_id}", response_model=List[Issue])
 async def get_issues(
     project_id: int, 
@@ -95,3 +104,53 @@ async def create_issue(
     await session.commit()
     await session.refresh(issue)
     return issue
+
+# --- Subscription Endpoints ---
+PLAN_PRICES = {
+    "basic": 599,
+    "pro": 999,
+    "enterprise": 1299,
+}
+
+@app.get("/me", response_model=User)
+async def get_current_user(
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    """Get the current logged-in user's profile & subscription status."""
+    uid = user_data.get("uid")
+    result = await session.execute(select(User).where(User.uid == uid))
+    db_user = result.scalar_one_or_none()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found. Please register first.")
+    return db_user
+
+@app.post("/subscribe")
+async def subscribe(
+    plan: str,
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    """Subscribe the current user to a plan (simulated payment)."""
+    if plan not in PLAN_PRICES:
+        raise HTTPException(status_code=400, detail=f"Invalid plan. Choose from: {list(PLAN_PRICES.keys())}")
+    
+    uid = user_data.get("uid")
+    result = await session.execute(select(User).where(User.uid == uid))
+    db_user = result.scalar_one_or_none()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    
+    from datetime import datetime, timezone, timedelta
+    db_user.subscription_plan = plan
+    db_user.subscription_expiry = datetime.now(timezone.utc) + timedelta(days=30)
+    
+    await session.commit()
+    await session.refresh(db_user)
+    return {
+        "message": f"Subscribed to {plan} plan successfully.",
+        "plan": plan,
+        "price": PLAN_PRICES[plan],
+        "expires_at": db_user.subscription_expiry.isoformat()
+    }

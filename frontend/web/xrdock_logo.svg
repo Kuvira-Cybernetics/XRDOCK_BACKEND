@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 560" fill="#333333">
+  <!-- X shape: two chevrons -->
+  <!-- Left chevron of X -->
+  <polygon points="0,0 70,0 130,90 70,180 0,180 60,90"/>
+  <!-- Right chevron of X (pointing left) -->
+  <polygon points="200,0 130,0 70,90 130,180 200,180 140,90"/>
+
+  <!-- R shape: circle with cutout + leg -->
+  <!-- Outer circle -->
+  <circle cx="340" cy="90" r="90"/>
+  <!-- Inner circle cutout -->
+  <circle cx="340" cy="90" r="45" fill="white"/>
+  <!-- Bottom cutout to make it open like R -->
+  <rect x="250" y="135" width="180" height="45" fill="white"/>
+  <!-- Right leg of R -->
+  <polygon points="390,135 430,135 520,180 480,180"/>
+
+  <!-- Horizontal divider -->
+  <rect x="0" y="195" width="520" height="10"/>
+
+  <!-- D shape -->
+  <rect x="0" y="220" width="55" height="180"/>
+  <path d="M55,220 Q165,220 165,310 Q165,400 55,400 L55,355 Q115,355 115,310 Q115,265 55,265 Z"/>
+
+  <!-- O shape -->
+  <circle cx="255" cy="310" r="90"/>
+  <circle cx="255" cy="310" r="45" fill="white"/>
+
+  <!-- C shape -->
+  <path d="M410,220 Q520,220 520,310 Q520,400 410,400 L410,355 Q470,355 470,310 Q470,265 410,265 Z" transform="scale(-1,1) translate(-820,0)"/>
+
+  <!-- K shape -->
+  <rect x="410" y="220" width="55" height="180"/>
+  <polygon points="465,220 520,220 465,310 520,400 465,400 410,310"/>
+</svg>

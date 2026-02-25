@@ -5,6 +5,7 @@ import 'theme/xrdock_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/subscription_screen.dart';
 import 'screens/profile_screen.dart';
 
 void main() async {
@@ -44,6 +45,7 @@ class _XRDockAppState extends State<XRDockApp> {
       routes: {
         '/': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/subscribe': (context) => const SubscriptionScreen(),
         '/dashboard': (context) => DashboardScreen(onThemeToggle: _toggleTheme),
         '/profile': (context) => const ProfileScreen(),
       },

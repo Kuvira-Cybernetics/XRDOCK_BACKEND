@@ -5,8 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../common/common.dart';
 
 class IssueListPanel extends StatefulWidget {
-  final int projectId;
-  const IssueListPanel({super.key, required this.projectId});
+  final int? projectId; // null = show all projects' issues
+  const IssueListPanel({super.key, this.projectId});
 
   @override
   State<IssueListPanel> createState() => _IssueListPanelState();
@@ -42,8 +42,12 @@ class _IssueListPanelState extends State<IssueListPanel> {
       // Get token, potentially forcing refresh if this is a retry
       final token = await user?.getIdToken(isRetry);
 
+      // Use /issues for all projects, /issues/{id} for specific project
+      final url = widget.projectId != null
+          ? '${CommonData.backendUrl}/issues/${widget.projectId}'
+          : '${CommonData.backendUrl}/issues';
       final response = await http.get(
-        Uri.parse('${CommonData.backendUrl}/issues/${widget.projectId}'),
+        Uri.parse(url),
         headers: {'Authorization': 'Bearer $token'},
       );
 

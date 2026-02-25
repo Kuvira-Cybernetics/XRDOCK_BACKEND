@@ -10,12 +10,32 @@ class UserProfileCard extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Collapsed: plain centered avatar, no container chrome
+    if (isCollapsed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: CircleAvatar(
+            radius: 20,
+            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.15),
+            child: Text(
+              (user?.displayName ?? user?.email ?? '?')
+                  .substring(0, 1)
+                  .toUpperCase(),
+              style: TextStyle(
+                color: Theme.of(context).primaryColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Expanded: full card with name + email
     return Container(
-      padding: EdgeInsets.all(isCollapsed ? 4 : 16),
-      margin: EdgeInsets.symmetric(
-        horizontal: isCollapsed ? 4 : 12,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withOpacity(0.05)
@@ -28,13 +48,9 @@ class UserProfileCard extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: isCollapsed
-            ? MainAxisAlignment.center
-            : MainAxisAlignment.start,
         children: [
           CircleAvatar(
-            radius: isCollapsed ? 18 : 20,
+            radius: 20,
             backgroundColor: Theme.of(context).primaryColor.withOpacity(0.2),
             child: Text(
               (user?.displayName ?? user?.email ?? '?')
@@ -46,33 +62,31 @@ class UserProfileCard extends StatelessWidget {
               ),
             ),
           ),
-          if (!isCollapsed) ...[
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    user?.displayName ?? 'Operator',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  user?.displayName ?? 'Operator',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
-                  Text(
-                    user?.email ?? 'Unknown Identity',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey,
-                      fontSize: 10,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  user?.email ?? 'Unknown Identity',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                    fontSize: 10,
                   ),
-                ],
-              ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );

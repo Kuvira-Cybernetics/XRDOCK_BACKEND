@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 class XRDockTheme {
   static const Color primaryBlue = Color(0xFF007BFF);
-  static const Color neonCyan = Color(0xFF00F2FF);
+  static const Color neonCyan = Color(0xFF007BFF);
   static const Color deepNavy = Color(0xFF000A1A);
 
   static ThemeData get lightTheme {
