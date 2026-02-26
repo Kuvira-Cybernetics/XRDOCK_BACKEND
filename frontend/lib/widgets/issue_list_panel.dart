@@ -74,6 +74,203 @@ class _IssueListPanelState extends State<IssueListPanel> {
     }
   }
 
+  Future<void> _deleteIssue(int id) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.delete(
+        Uri.parse('${CommonData.backendUrl}/issues/$id'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        _fetchIssues();
+      }
+    } catch (e) {
+      debugPrint('Error deleting issue: $e');
+    }
+  }
+
+  Future<void> _updateIssue(int id, Map<String, dynamic> data) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.put(
+        Uri.parse('${CommonData.backendUrl}/issues/$id'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data),
+      );
+      if (response.statusCode == 200) {
+        _fetchIssues();
+      }
+    } catch (e) {
+      debugPrint('Error updating issue: $e');
+    }
+  }
+
+  Future<void> _createIssue(Map<String, dynamic> data) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.post(
+        Uri.parse('${CommonData.backendUrl}/issues'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data),
+      );
+      if (response.statusCode == 200) {
+        _fetchIssues();
+      }
+    } catch (e) {
+      debugPrint('Error creating issue: $e');
+    }
+  }
+
+  void _showCreateDialog(BuildContext context) async {
+    // Show a loading indicator while fetching projects
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    List<Map<String, dynamic>> allProjects = [];
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.get(
+        Uri.parse('${CommonData.backendUrl}/projects'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        allProjects = data.map((e) => e as Map<String, dynamic>).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching projects: $e');
+    }
+
+    // Dismiss loading indicator
+    if (context.mounted) Navigator.pop(context);
+
+    if (!context.mounted) return;
+
+    String currentStatus = 'open';
+    String currentPriority = 'medium';
+    int? selectedProjectForIssue = widget.projectId;
+
+    // If widget.projectId is set but isn't in the list (unlikely), reset it.
+    if (selectedProjectForIssue != null &&
+        !allProjects.any((p) => p['id'] == selectedProjectForIssue)) {
+      selectedProjectForIssue = null;
+    }
+
+    final titleCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Add Issue'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      value: selectedProjectForIssue,
+                      decoration: const InputDecoration(labelText: 'Project'),
+                      hint: const Text('Select a Project'),
+                      items: allProjects.map((p) {
+                        return DropdownMenuItem<int>(
+                          value: p['id'] as int,
+                          child: Text(p['name'].toString()),
+                        );
+                      }).toList(),
+                      onChanged: (val) =>
+                          setStateDialog(() => selectedProjectForIssue = val),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: currentStatus,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(value: 'open', child: Text('Open')),
+                        DropdownMenuItem(
+                          value: 'in-progress',
+                          child: Text('In Progress'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'closed',
+                          child: Text('Closed'),
+                        ),
+                      ],
+                      onChanged: (val) =>
+                          setStateDialog(() => currentStatus = val!),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: currentPriority,
+                      decoration: const InputDecoration(labelText: 'Priority'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'urgent',
+                          child: Text('Urgent'),
+                        ),
+                        DropdownMenuItem(value: 'high', child: Text('High')),
+                        DropdownMenuItem(
+                          value: 'medium',
+                          child: Text('Medium'),
+                        ),
+                        DropdownMenuItem(value: 'low', child: Text('Low')),
+                      ],
+                      onChanged: (val) =>
+                          setStateDialog(() => currentPriority = val!),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (titleCtrl.text.trim().isNotEmpty &&
+                        selectedProjectForIssue != null) {
+                      _createIssue({
+                        'title': titleCtrl.text.trim(),
+                        'status': currentStatus,
+                        'priority': currentPriority,
+                        'project_id': selectedProjectForIssue,
+                      });
+                      Navigator.pop(ctx);
+                    } else if (selectedProjectForIssue == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please select a project to proceed.'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('CREATE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _applyFilters() {
     setState(() {
       _filteredIssues = _issues.where((issue) {
@@ -113,9 +310,28 @@ class _IssueListPanelState extends State<IssueListPanel> {
                   letterSpacing: 2,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _fetchIssues,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _showCreateDialog(context),
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('NEW ISSUE'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _fetchIssues,
+                  ),
+                ],
               ),
             ],
           ),
@@ -176,7 +392,12 @@ class _IssueListPanelState extends State<IssueListPanel> {
                         const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final issue = _filteredIssues[index];
-                      return _IssueTile(issue: issue);
+                      return _IssueTile(
+                        issue: issue,
+                        onDelete: () => _deleteIssue(issue['id']),
+                        onEdit: (updatedData) =>
+                            _updateIssue(issue['id'], updatedData),
+                      );
                     },
                   ),
           ),
@@ -224,13 +445,114 @@ class _IssueListPanelState extends State<IssueListPanel> {
   }
 }
 
-class _IssueTile extends StatelessWidget {
+class _IssueTile extends StatefulWidget {
   final Map<String, dynamic> issue;
-  const _IssueTile({required this.issue});
+  final VoidCallback onDelete;
+  final Function(Map<String, dynamic>) onEdit;
+
+  const _IssueTile({
+    required this.issue,
+    required this.onDelete,
+    required this.onEdit,
+  });
+
+  @override
+  State<_IssueTile> createState() => _IssueTileState();
+}
+
+class _IssueTileState extends State<_IssueTile> {
+  void _showEditDialog(BuildContext context) {
+    String currentTitle = widget.issue['title'] ?? '';
+    String currentStatus = widget.issue['status'] ?? 'open';
+    String currentPriority = widget.issue['priority'] ?? 'medium';
+
+    final titleCtrl = TextEditingController(text: currentTitle);
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Edit Issue'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: currentStatus.toLowerCase(),
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(value: 'open', child: Text('Open')),
+                        DropdownMenuItem(
+                          value: 'in-progress',
+                          child: Text('In Progress'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'closed',
+                          child: Text('Closed'),
+                        ),
+                      ],
+                      onChanged: (val) =>
+                          setStateDialog(() => currentStatus = val!),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: currentPriority.toLowerCase(),
+                      decoration: const InputDecoration(labelText: 'Priority'),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'urgent',
+                          child: Text('Urgent'),
+                        ),
+                        DropdownMenuItem(value: 'high', child: Text('High')),
+                        DropdownMenuItem(
+                          value: 'medium',
+                          child: Text('Medium'),
+                        ),
+                        DropdownMenuItem(value: 'low', child: Text('Low')),
+                      ],
+                      onChanged: (val) =>
+                          setStateDialog(() => currentPriority = val!),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (titleCtrl.text.trim().isNotEmpty) {
+                      widget.onEdit({
+                        'title': titleCtrl.text.trim(),
+                        'status': currentStatus,
+                        'priority': currentPriority,
+                      });
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  child: const Text('SAVE'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final issue = widget.issue;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -297,7 +619,50 @@ class _IssueTile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: Colors.grey),
+          IconButton(
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: Colors.blueGrey,
+              size: 20,
+            ),
+            onPressed: () => _showEditDialog(context),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Colors.redAccent,
+              size: 20,
+            ),
+            onPressed: () {
+              // Confirm deletion
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Delete Issue?'),
+                  content: const Text('This action cannot be undone.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('CANCEL'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        widget.onDelete();
+                      },
+                      child: const Text(
+                        'DELETE',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 from fastapi import Header, HTTPException, status
 import firebase_admin
-from firebase_admin import auth
+from firebase_admin import auth, credentials
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,9 +9,12 @@ load_dotenv()
 try:
     firebase_admin.get_app()
 except ValueError:
-    firebase_admin.initialize_app(options={'projectId': 'xrdock-app'})
-
-import os
+    if os.path.exists("serviceAccountKey.json"):
+        cred = credentials.Certificate("serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
+    else:
+        print("Warning: serviceAccountKey.json not found. Falling back to default app initialization.")
+        firebase_admin.initialize_app(options={'projectId': 'xrdock-app'})
 
 async def verify_firebase_token(authorization: str = Header(default=None)):
     # DEBUG BYPASS

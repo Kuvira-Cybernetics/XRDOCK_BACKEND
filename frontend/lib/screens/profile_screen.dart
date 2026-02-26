@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import '../common/common.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -14,9 +15,37 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
+  final _jobTitleController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _linkedinController = TextEditingController();
+  final _companyNameController = TextEditingController();
+  final _companyWebsiteController = TextEditingController();
+  final _industryController = TextEditingController();
+  final _employeeCountController = TextEditingController();
+  final _countryController = TextEditingController();
+  final _projectTypeController = TextEditingController();
+  final _expectedSeatsController = TextEditingController();
+
   bool _isLoading = false;
   bool _isLoadingProfile = true;
   Map<String, dynamic>? _backendUser;
+  String? _base64Image;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (pickedFile != null) {
+      final bytes = await pickedFile.readAsBytes();
+      setState(() {
+        _base64Image = base64Encode(bytes);
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -37,6 +66,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) {
           setState(() {
             _backendUser = json.decode(response.body);
+            // Pre-fill controllers
+            _nameController.text =
+                _backendUser?['name'] ??
+                FirebaseAuth.instance.currentUser?.displayName ??
+                '';
+            _jobTitleController.text = _backendUser?['job_title'] ?? '';
+            _phoneController.text = _backendUser?['phone_number'] ?? '';
+            _linkedinController.text = _backendUser?['linkedin_url'] ?? '';
+            _companyNameController.text = _backendUser?['company_name'] ?? '';
+            _companyWebsiteController.text =
+                _backendUser?['company_website'] ?? '';
+            _industryController.text = _backendUser?['industry'] ?? '';
+            _employeeCountController.text =
+                _backendUser?['employee_count'] ?? '';
+            _countryController.text = _backendUser?['country'] ?? '';
+            _projectTypeController.text = _backendUser?['project_type'] ?? '';
+            _expectedSeatsController.text =
+                _backendUser?['expected_seats']?.toString() ?? '';
+            _base64Image = _backendUser?['profile_image'];
           });
         }
       }
@@ -47,20 +95,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveName() async {
+  Future<void> _saveProfile() async {
     if (_nameController.text.trim().isEmpty) return;
     setState(() => _isLoading = true);
     try {
+      // 1. Update Firebase Name
       await FirebaseAuth.instance.currentUser?.updateDisplayName(
         _nameController.text.trim(),
       );
-      if (mounted) {
+
+      // 2. Update Backend Profile
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final body = jsonEncode({
+        'name': _nameController.text.trim(),
+        'job_title': _jobTitleController.text.trim(),
+        'phone_number': _phoneController.text.trim(),
+        'linkedin_url': _linkedinController.text.trim(),
+        'company_name': _companyNameController.text.trim(),
+        'company_website': _companyWebsiteController.text.trim(),
+        'industry': _industryController.text.trim(),
+        'employee_count': _employeeCountController.text.trim(),
+        'country': _countryController.text.trim(),
+        'project_type': _projectTypeController.text.trim(),
+        'expected_seats': int.tryParse(_expectedSeatsController.text.trim()),
+        if (_base64Image != null) 'profile_image': _base64Image,
+      });
+
+      final response = await http.post(
+        Uri.parse('${CommonData.backendUrl}/users'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200 && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Name updated successfully!'),
+            content: Text('Profile updated successfully!'),
             backgroundColor: Colors.green,
           ),
         );
+      } else if (mounted) {
+        throw Exception('Failed to update profile on backend.');
       }
     } catch (e) {
       if (mounted) {
@@ -142,270 +220,378 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final plan = _backendUser?['subscription_plan'];
+    final plan = _backendUser?['subscription_plan'] ?? 'No Plan';
     final isAdmin = _backendUser?['is_admin'] == true;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? CommonData.darkBackground
-          : const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          'MY PROFILE',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: isDark ? Colors.white : Colors.black,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.white.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                  ),
-                  child: Column(
-                    children: [
-                      // Avatar with edit button
-                      Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundColor: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.15),
-                            backgroundImage: user?.photoURL != null
-                                ? NetworkImage(user!.photoURL!)
-                                : null,
-                            child: user?.photoURL == null
-                                ? Text(
-                                    (user?.displayName ?? user?.email ?? '?')
-                                        .substring(0, 1)
-                                        .toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 36,
-                                      color: Theme.of(context).primaryColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Photo upload coming soon!'),
-                                  ),
-                                );
-                              },
-                              child: CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Theme.of(context).primaryColor,
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Editable Name field
-                      TextField(
-                        controller: _nameController,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+      backgroundColor: Colors.transparent,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth > 900;
+          return Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF15191C) : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
                         ),
-                        decoration: InputDecoration(
-                          hintText: 'Your Name',
-                          border: InputBorder.none,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              Icons.check,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                            onPressed: _isLoading ? null : _saveName,
-                          ),
-                        ),
-                      ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Top Gradient Banner
+                        _buildGradientBanner(isDark),
 
-                      // Disabled Email
-                      TextField(
-                        enabled: false,
-                        controller: TextEditingController(
-                          text: user?.email ?? 'N/A',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          prefixIcon: Icon(
-                            Icons.lock_outline,
-                            size: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-                      const Divider(),
-                      const SizedBox(height: 16),
-
-                      // Subscription Card
-                      if (_isLoadingProfile)
-                        const CircularProgressIndicator()
-                      else ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                _planColor(plan).withOpacity(0.15),
-                                _planColor(plan).withOpacity(0.05),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: _planColor(plan).withOpacity(0.4),
-                            ),
-                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    isAdmin
-                                        ? Icons.admin_panel_settings
-                                        : Icons.workspace_premium_outlined,
-                                    color: _planColor(plan),
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    isAdmin
-                                        ? 'ADMIN • PERPETUAL ACCESS'
-                                        : (_planLabel(plan).toUpperCase()),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: _planColor(plan),
-                                      fontSize: 13,
-                                      letterSpacing: 1,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.calendar_today_outlined,
-                                    size: 14,
-                                    color: Colors.grey,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    isAdmin
-                                        ? 'Never expires'
-                                        : _formatExpiry(
-                                            _backendUser?['subscription_expiry'],
-                                          ),
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (!isAdmin && plan != null) ...[
-                                const SizedBox(height: 12),
-                                OutlinedButton(
-                                  onPressed: () => Navigator.pushNamed(
-                                    context,
-                                    '/subscribe',
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: _planColor(plan),
-                                    side: BorderSide(
-                                      color: _planColor(plan).withOpacity(0.5),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'RENEW / UPGRADE',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                ),
+                              // 2. Profile Header Row
+                              _buildProfileHeader(user, isDark),
+
+                              const SizedBox(height: 32),
+
+                              if (_isLoadingProfile)
+                                const Center(child: Padding(padding: EdgeInsets.all(64), child: CircularProgressIndicator()))
+                              else ...[
+                                // 3. Form Grid
+                                _buildFormGrid(isDesktop, isDark),
+
+                                const SizedBox(height: 48),
+
+                                // 4. Email Section
+                                _buildEmailSection(user, isDark),
+                                
+                                const SizedBox(height: 32),
+                                _buildSubscriptionSummary(plan, isAdmin, isDark),
                               ],
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
                       ],
-
-                      // Logout Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _logout,
-                          icon: const Icon(Icons.logout),
-                          label: const Text('LOG OUT'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent.withOpacity(0.1),
-                            foregroundColor: Colors.redAccent,
-                            elevation: 0,
-                            side: const BorderSide(color: Colors.redAccent),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildGradientBanner(bool isDark) {
+    return Container(
+      height: 120,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        gradient: LinearGradient(
+          colors: isDark 
+            ? [const Color(0xFF2C3E50), const Color(0xFF4CA1AF)]
+            : [const Color(0xFFE0EAFC), const Color(0xFFCFDEF3)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
+    );
+  }
+
+  Widget _buildProfileHeader(User? user, bool isDark) {
+    return Transform.translate(
+      offset: const Offset(0, -30),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Avatar
+          Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: isDark ? const Color(0xFF15191C) : Colors.white, width: 4),
+                ),
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
+                  backgroundImage: _base64Image != null && _base64Image!.isNotEmpty
+                      ? MemoryImage(base64Decode(_base64Image!))
+                      : (user?.photoURL != null ? NetworkImage(user!.photoURL!) as ImageProvider : null),
+                  child: (_base64Image == null || _base64Image!.isEmpty) && user?.photoURL == null
+                      ? Text(
+                          (_nameController.text.isNotEmpty ? _nameController.text : (user?.email ?? '?'))
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style: TextStyle(fontSize: 40, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+                        )
+                      : null,
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: GestureDetector(
+                  onTap: _pickImage,
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Theme.of(context).primaryColor,
+                    child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 24),
+          // Name and Email
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _nameController.text.isEmpty ? 'New User' : _nameController.text,
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  user?.email ?? '',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+          // Save Button (Edit/Save)
+          ElevatedButton(
+            onPressed: _isLoading ? null : _saveProfile,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: _isLoading 
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFormGrid(bool isDesktop, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader('Contact Information', isDark),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernField(_nameController, "Full Name", "Your Full Name"),
+          _buildModernField(_phoneController, "Phone", "Phone Number"),
+        ]),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernField(_jobTitleController, "Job Title", "e.g. Architect"),
+          _buildModernField(_linkedinController, "LinkedIn", "Profile URL"),
+        ]),
+
+        _buildSectionHeader('Company Details', isDark),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernField(_companyNameController, "Company Name", "Your Company"),
+          _buildModernField(_companyWebsiteController, "Website", "e.g. https://..."),
+        ]),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernField(_industryController, "Industry", "e.g. Construction"),
+          _buildModernField(_employeeCountController, "Company Size", "e.g. 1-10"),
+        ]),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernCountryDropdown(isDark),
+          _buildModernField(_projectTypeController, "Project Type", "e.g. Simulation"),
+        ]),
+
+        _buildSectionHeader('Primary Use Case', isDark),
+        _buildResponsiveRow(isDesktop, [
+          _buildModernField(_expectedSeatsController, "Expected Seats", "Quantity", isNumber: true),
+          const SizedBox.shrink(), // Spacer for balance
+        ]),
+      ],
+    );
+  }
+
+  Widget _buildResponsiveRow(bool isDesktop, List<Widget> children) {
+    if (!isDesktop) return Column(children: children);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        children: [
+          Expanded(child: children[0]),
+          const SizedBox(width: 24),
+          Expanded(child: children[1]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 20),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+          color: isDark ? Colors.white54 : Colors.black45,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernField(TextEditingController controller, String label, String hint, {bool isNumber = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+              filled: true,
+              fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernCountryDropdown(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Country", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _countryController.text.isEmpty ? null : _countryController.text,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            items: ['United States', 'India', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Other']
+                .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 14))))
+                .toList(),
+            onChanged: (val) { if (val != null) setState(() => _countryController.text = val); },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmailSection(User? user, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("My email Address", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.blue[50]?.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[100],
+                child: const Icon(Icons.email_outlined, color: Colors.blue, size: 18),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(user?.email ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text("Primary Email", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionSummary(String plan, bool isAdmin, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isAdmin ? 'Plan: ADMIN' : 'Plan: ${plan.toUpperCase()}',
+                  style: TextStyle(color: _planColor(plan), fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isAdmin ? 'Perpetual Access' : _formatExpiry(_backendUser?['subscription_expiry']),
+                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                ),
+              ],
+            ),
+            if (!isAdmin && plan != 'No Plan') ...[
+              const SizedBox(width: 24),
+              OutlinedButton(
+                onPressed: () => Navigator.pushNamed(context, '/subscribe'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _planColor(plan),
+                  side: BorderSide(color: _planColor(plan).withOpacity(0.5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                child: const Text('RENEW / UPGRADE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ],
+        ),
+        TextButton.icon(
+          onPressed: _logout,
+          icon: const Icon(Icons.logout, size: 18),
+          label: const Text('Log Out', style: TextStyle(fontSize: 13)),
+          style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+        ),
+      ],
     );
   }
 }

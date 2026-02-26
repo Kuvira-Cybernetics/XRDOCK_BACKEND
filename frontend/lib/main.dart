@@ -7,11 +7,31 @@ import 'screens/register_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/admin_screen.dart';
+import 'common/common.dart';
+import 'widgets/main_layout.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Analytics is usually enabled by default; manual call was causing a crash on web
+
+  // Capture token from URL before the router strips it (especially for Web)
+  final uri = Uri.base;
+  String? token;
+  if (uri.fragment.contains('token=')) {
+    final fragmentParts = uri.fragment.split('?');
+    if (fragmentParts.length > 1) {
+      token = Uri.splitQueryString(fragmentParts.last)['token'];
+    }
+  } else if (uri.queryParameters.containsKey('token')) {
+    token = uri.queryParameters['token'];
+  }
+
+  if (token != null) {
+    debugPrint('MAIN: Captured token from startup: ${token.substring(0, 10)}...');
+    CommonData.pendingAutodeskToken = token;
+  }
+
   runApp(const XRDockApp());
 }
 
@@ -44,10 +64,32 @@ class _XRDockAppState extends State<XRDockApp> {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
+        '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/subscribe': (context) => const SubscriptionScreen(),
-        '/dashboard': (context) => DashboardScreen(onThemeToggle: _toggleTheme),
-        '/profile': (context) => const ProfileScreen(),
+        '/dashboard': (context) => MainLayout(
+          onThemeToggle: _toggleTheme,
+          child: const DashboardScreen(),
+        ),
+        '/profile': (context) => MainLayout(
+          onThemeToggle: _toggleTheme,
+          child: const ProfileScreen(),
+        ),
+        '/admin': (context) => MainLayout(
+          onThemeToggle: _toggleTheme,
+          child: const AdminScreen(),
+        ),
+      },
+      onGenerateRoute: (settings) {
+        // Handle routes with query parameters like "/login?token=..."
+        final name = settings.name ?? '';
+        if (name.startsWith('/login?') || name.startsWith('/?')) {
+          return MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+            settings: settings,
+          );
+        }
+        return null;
       },
     );
   }

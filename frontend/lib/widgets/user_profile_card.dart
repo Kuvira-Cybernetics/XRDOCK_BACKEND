@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:frontend/common/common.dart';
 
 class UserProfileCard extends StatelessWidget {
   final bool isCollapsed;
@@ -53,7 +54,11 @@ class UserProfileCard extends StatelessWidget {
             radius: 20,
             backgroundColor: Theme.of(context).primaryColor.withOpacity(0.2),
             child: Text(
-              (user?.displayName ?? user?.email ?? '?')
+              (CommonData.currentUserName ??
+                      user?.displayName ??
+                      CommonData.currentUserEmail ??
+                      user?.email ??
+                      '?')
                   .substring(0, 1)
                   .toUpperCase(),
               style: TextStyle(
@@ -69,7 +74,7 @@ class UserProfileCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  user?.displayName ?? 'Operator',
+                  CommonData.currentUserName ?? user?.displayName ?? 'Operator',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
@@ -77,7 +82,9 @@ class UserProfileCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  user?.email ?? 'Unknown Identity',
+                  CommonData.currentUserEmail ??
+                      user?.email ??
+                      'Unknown Identity',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.grey,
                     fontSize: 10,

@@ -6,27 +6,45 @@ import '../widgets/user_profile_card.dart';
 import '../widgets/issue_list_panel.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
+import '../widgets/autodesk_file_browser.dart';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
 
 class DashboardScreen extends StatefulWidget {
-  final VoidCallback onThemeToggle;
-
-  const DashboardScreen({super.key, required this.onThemeToggle});
+  const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  void _logout({bool force = false}) async {
+    await FirebaseAuth.instance.signOut();
+    
+    // Clear global state
+    CommonData.currentUserId = null;
+    CommonData.currentUserEmail = null;
+    CommonData.currentUserName = null;
+    CommonData.pendingAutodeskToken = null;
+
+    if (mounted) {
+      if (kIsWeb) {
+        html.window.history.replaceState(null, 'XR-DOCK', '/#/');
+      }
+      Navigator.pushReplacementNamed(context, '/');
+    }
+  }
+
   List<dynamic> _projects = [];
   int? _selectedProjectId;
   String? _selectedModelFile;
   Map<String, dynamic>? _selectedProject; // full project data for detail view
   bool _isLoadingProjects = true;
-  bool _showProjectGallery = true; // default: show gallery
-  bool _showAllIssues = false; // global all-projects issues view
   int _detailTab = 0; // 0: 3D viewer, 1: issues
 
-  bool _isCollapsed = false;
+  bool get _showAllIssues => CommonData.showAllIssuesInDashboard;
+  bool get _showProjectGallery => !CommonData.showAllIssuesInDashboard && _selectedProject == null;
 
   @override
   void initState() {
@@ -43,6 +61,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
+        
+        // Sync user details to global state
+        CommonData.currentUserName = userData['name'];
+        CommonData.currentUserEmail = userData['email'];
+        CommonData.currentUserId = userData['uid'];
+        
         final expiryStr = userData['subscription_expiry'];
         final isAdmin = userData['is_admin'] == true;
         if (!isAdmin && expiryStr != null) {
@@ -86,14 +110,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchProjects() async {
     try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.get(
         Uri.parse('${CommonData.backendUrl}/projects'),
+        headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           _projects = data;
-          if (_projects.isNotEmpty) {
+          if (_projects.isNotEmpty && _selectedProject == null) {
             _selectedProjectId = _projects[0]['id'];
             _selectedModelFile = _projects[0]['model_filename'];
           }
@@ -106,210 +132,351 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _createProject(String name, PlatformFile? modelFile) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final body = {'name': name};
+      final response = await http.post(
+        Uri.parse('${CommonData.backendUrl}/projects'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+      if (response.statusCode == 200) {
+        final newProject = jsonDecode(response.body);
+        if (modelFile != null) {
+          await _uploadModel(newProject['id'], modelFile);
+        }
+        _fetchProjects();
+      }
+    } catch (e) {
+      debugPrint('Error creating project: $e');
+    }
+  }
+
+  Future<void> _uploadModel(int projectId, PlatformFile file) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${CommonData.backendUrl}/projects/$projectId/model'),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+
+      if (file.bytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            file.bytes!,
+            filename: file.name,
+          ),
+        );
+      }
+
+      var response = await request.send();
+      if (response.statusCode != 200) {
+        debugPrint('Model upload failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error uploading model: $e');
+    }
+  }
+
+  Future<void> _deleteProject(int id) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.delete(
+        Uri.parse('${CommonData.backendUrl}/projects/$id'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode == 200) {
+        if (_selectedProjectId == id) {
+          setState(() {
+            _selectedProject = null;
+            _selectedProjectId = null;
+            _selectedModelFile = null;
+          });
+        }
+        _fetchProjects();
+      }
+    } catch (e) {
+      debugPrint('Error deleting project: $e');
+    }
+  }
+
+  Future<void> _updateProject(
+    int id,
+    String name,
+    PlatformFile? modelFile,
+  ) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final body = {'name': name};
+      final response = await http.put(
+        Uri.parse('${CommonData.backendUrl}/projects/$id'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+      if (response.statusCode == 200) {
+        if (modelFile != null) {
+          await _uploadModel(id, modelFile);
+        }
+        if (_selectedProjectId == id && _selectedProject != null) {
+          setState(() {
+            _selectedProject!['name'] = name;
+          });
+        }
+        _fetchProjects();
+      }
+    } catch (e) {
+      debugPrint('Error updating project: $e');
+    }
+  }
+
+  void _showCreateProjectDialog() {
+    final nameCtrl = TextEditingController();
+    PlatformFile? pickedFile;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('New Project'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Project Name'),
+                autofocus: true,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      pickedFile?.name ?? 'No 3D model selected',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        debugPrint('Attempting to pick file...');
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['glb'],
+                          withData: true,
+                        );
+                        if (result != null) {
+                          debugPrint('File picked: ${result.files.first.name}');
+                          setDialogState(() => pickedFile = result.files.first);
+                        } else {
+                          debugPrint('File picking cancelled.');
+                        }
+                      } catch (e) {
+                        debugPrint('FilePicker error: $e');
+                      }
+                    },
+                    child: const Text('SELECT .GLB'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isNotEmpty) {
+                  _createProject(nameCtrl.text.trim(), pickedFile);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('CREATE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProjectDialog(Map<String, dynamic> project) {
+    final nameCtrl = TextEditingController(text: project['name']);
+    PlatformFile? pickedFile;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Project'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Project Name'),
+                autofocus: true,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      pickedFile?.name ?? 'Change 3D model (Optional)',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        debugPrint('Attempting to pick file (edit)...');
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['glb'],
+                          withData: true,
+                        );
+                        if (result != null) {
+                          debugPrint(
+                            'File picked (edit): ${result.files.first.name}',
+                          );
+                          setDialogState(() => pickedFile = result.files.first);
+                        } else {
+                          debugPrint('File picking (edit) cancelled.');
+                        }
+                      } catch (e) {
+                        debugPrint('FilePicker error (edit): $e');
+                      }
+                    },
+                    child: const Text('SELECT .GLB'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isNotEmpty) {
+                  _updateProject(
+                    project['id'],
+                    nameCtrl.text.trim(),
+                    pickedFile,
+                  );
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('SAVE'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAutodeskImportDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import from Autodesk'),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: AutodeskFileBrowser(
+            onFileSelected: (projectId, itemId, name) async {
+              Navigator.pop(context);
+              await _importAutodeskFile(projectId, itemId, name);
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importAutodeskFile(
+    String projectId,
+    String itemId,
+    String name,
+  ) async {
+    try {
+      setState(() => _isLoadingProjects = true);
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.post(
+        Uri.parse('${CommonData.backendUrl}/autodesk/import'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'project_id': projectId,
+          'item_id': itemId,
+          'name': name,
+        }),
+      );
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Import started. Translation in progress...'),
+            ),
+          );
+        }
+        _fetchProjects();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Import failed: ${response.body}')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error importing Autodesk file: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingProjects = false);
+    }
+  }
+
   void _openProject(Map<String, dynamic> project) {
     setState(() {
       _selectedProject = project;
-      _selectedProjectId = project['id'] as int?;
-      _selectedModelFile = project['model_filename'] as String?;
-      _showProjectGallery = false;
       _detailTab = 0;
     });
   }
 
-  void _logout({bool force = false}) async {
-    if (!force) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Log Out'),
-          content: const Text('Are you sure you want to log out?'),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('LOG OUT'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm != true) return;
-    }
-
-    await FirebaseAuth.instance.signOut();
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      body: Row(
-        children: [
-          // Premium Sidebar
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            width: _isCollapsed ? 80 : 280,
-            decoration: BoxDecoration(
-              color: isDark ? CommonData.panelBackground : Colors.white,
-              border: Border(
-                right: BorderSide(color: Colors.grey.withOpacity(0.1)),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-                // Logo / Collapse toggle
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _isCollapsed ? 8.0 : 16.0,
-                    vertical: 16,
-                  ),
-                  child: _isCollapsed
-                      ? Center(
-                          child: Tooltip(
-                            message: 'Expand sidebar',
-                            child: InkWell(
-                              onTap: () => setState(() => _isCollapsed = false),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).primaryColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.menu_open,
-                                  size: 22,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                height: 34,
-                                errorBuilder: (_, __, ___) => Text(
-                                  'XR-DOCK',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 3,
-                                      ),
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.chevron_left,
-                                size: 20,
-                                color: Theme.of(context).primaryColor,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _isCollapsed = true),
-                              constraints: const BoxConstraints(),
-                              padding: EdgeInsets.zero,
-                            ),
-                          ],
-                        ),
-                ),
-                UserProfileCard(isCollapsed: _isCollapsed),
-                const SizedBox(height: 16),
-                _SidebarItem(
-                  icon: Icons.folder_special_outlined,
-                  label: 'PROJECTS',
-                  isCollapsed: _isCollapsed,
-                  isSelected: _showProjectGallery,
-                  onTap: () => setState(() {
-                    _showProjectGallery = true;
-                    _showAllIssues = false;
-                    _selectedProject = null;
-                  }),
-                ),
-                _SidebarItem(
-                  icon: Icons.list_alt_rounded,
-                  label: 'ISSUES',
-                  isCollapsed: _isCollapsed,
-                  isSelected: _showAllIssues,
-                  onTap: () => setState(() {
-                    _showProjectGallery = false;
-                    _showAllIssues = true;
-                    _selectedProject = null;
-                  }),
-                ),
-                _SidebarItem(
-                  icon: Icons.person_outline_rounded,
-                  label: 'PROFILE',
-                  isCollapsed: _isCollapsed,
-                  isSelected: false,
-                  onTap: () => Navigator.pushNamed(context, '/profile'),
-                ),
-                const Spacer(),
-                if (_isCollapsed)
-                  Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 8,
-                    ),
-                    height: 1,
-                    color: Colors.grey.withOpacity(0.2),
-                  ),
-                _SidebarItem(
-                  icon: isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  label: isDark ? 'LIGHT MODE' : 'DARK MODE',
-                  isCollapsed: _isCollapsed,
-                  isSelected: false,
-                  onTap: widget.onThemeToggle,
-                ),
-                if (!_isCollapsed)
-                  const Divider(height: 1, indent: 24, endIndent: 24),
-                _SidebarItem(
-                  icon: Icons.logout_rounded,
-                  label: 'LOG OUT',
-                  isCollapsed: _isCollapsed,
-                  isSelected: false,
-                  onTap: _logout,
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-          // Main Content Viewport
-          Expanded(
-            child: Container(
-              color: isDark
-                  ? CommonData.darkBackground
-                  : const Color(0xFFF8FAFC),
-              child: _showAllIssues
-                  ? _buildAllIssuesView(isDark)
-                  : _showProjectGallery
-                  ? _buildProjectGallery(isDark)
-                  : _selectedProject != null
+    return Container(
+      color: isDark ? CommonData.darkBackground : const Color(0xFFF8FAFC),
+      child: _showAllIssues
+          ? _buildAllIssuesView(isDark)
+          : _showProjectGallery
+              ? _buildProjectGallery(isDark)
+              : _selectedProject != null
                   ? _buildProjectDetail(isDark)
                   : Center(
                       child: Column(
@@ -318,9 +485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Icon(
                             Icons.folder_open_outlined,
                             size: 64,
-                            color: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.3),
+                            color: Theme.of(context).primaryColor.withOpacity(0.3),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -333,10 +498,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -363,7 +524,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Theme.of(context).primaryColor,
                 ),
                 onPressed: () => setState(() {
-                  _showProjectGallery = true;
                   _selectedProject = null;
                 }),
               ),
@@ -468,8 +628,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const Spacer(),
               TextButton.icon(
                 onPressed: () => setState(() {
-                  _showAllIssues = false;
-                  _showProjectGallery = true;
+                  CommonData.showAllIssuesInDashboard = false;
+                  _selectedProject = null;
                 }),
                 icon: const Icon(Icons.folder_open_outlined, size: 16),
                 label: const Text('VIEW PROJECTS'),
@@ -488,14 +648,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'PROJECTS',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 3,
-              fontSize: 22,
-              color: Theme.of(context).primaryColor,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PROJECTS',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 3,
+                  fontSize: 22,
+                  color: Theme.of(context).primaryColor,
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _showAutodeskImportDialog,
+                icon: const Icon(Icons.cloud_download_outlined),
+                label: const Text('IMPORT FROM AUTODESK'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              ElevatedButton.icon(
+                onPressed: _showCreateProjectDialog,
+                icon: const Icon(Icons.add),
+                label: const Text('NEW PROJECT'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -518,7 +710,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     itemBuilder: (context, i) {
                       final project = _projects[i];
                       final isSelected = _selectedProjectId == project['id'];
-                      final thumbnailUrl = project['thumbnail_url'];
                       return GestureDetector(
                         onTap: () => _openProject(
                           Map<String, dynamic>.from(project as Map),
@@ -550,31 +741,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                if (thumbnailUrl != null)
-                                  Image.network(
-                                    thumbnailUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: isDark
-                                          ? const Color(0xFF1A2035)
-                                          : Colors.grey.shade100,
-                                      child: const Icon(
-                                        Icons.broken_image_outlined,
-                                        size: 40,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  Container(
-                                    color: isDark
-                                        ? const Color(0xFF1A2035)
-                                        : Colors.grey.shade100,
-                                    child: Icon(
-                                      Icons.view_in_ar_outlined,
-                                      size: 40,
-                                      color: Theme.of(context).primaryColor,
-                                    ),
-                                  ),
+                                ModelViewer(
+                                  key: ValueKey('thumb_${project['id']}'),
+                                  backgroundColor: isDark
+                                      ? const Color(0xFF1A2035)
+                                      : Colors.grey.shade100,
+                                  src:
+                                      '${CommonData.backendUrl}/static/models/${project['model_filename']}',
+                                  alt: project['name'],
+                                  ar: false,
+                                  autoRotate: true,
+                                  cameraControls: false, // strictly a thumbnail
+                                  disableZoom: true,
+                                  interactionPrompt: InteractionPrompt.none,
+                                ),
                                 // Dark gradient at bottom
                                 Positioned.fill(
                                   child: DecoratedBox(
@@ -595,55 +775,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   bottom: 14,
                                   left: 14,
                                   right: 14,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(
-                                        (project['name'] as String)
-                                            .toUpperCase(),
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          letterSpacing: 0.8,
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              (project['name'] as String)
+                                                  .toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                letterSpacing: 0.8,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            if (isSelected)
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).primaryColor,
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: const Text(
+                                                  'ACTIVE',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black,
+                                                    letterSpacing: 1,
+                                                  ),
+                                                ),
+                                              )
+                                            else
+                                              const Text(
+                                                'TAP TO RENDER',
+                                                style: TextStyle(
+                                                  color: Colors.white60,
+                                                  fontSize: 10,
+                                                ),
+                                              ),
+                                          ],
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 4),
-                                      if (isSelected)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Theme.of(
-                                              context,
-                                            ).primaryColor,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'ACTIVE',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black,
-                                              letterSpacing: 1,
-                                            ),
-                                          ),
-                                        )
-                                      else
-                                        const Text(
-                                          'TAP TO RENDER',
-                                          style: TextStyle(
-                                            color: Colors.white60,
-                                            fontSize: 10,
-                                          ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.edit_outlined,
+                                          color: Colors.blueGrey,
+                                          size: 20,
                                         ),
+                                        onPressed: () {
+                                          _showEditProjectDialog(
+                                            Map<String, dynamic>.from(
+                                              project as Map,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.redAccent,
+                                          size: 20,
+                                        ),
+                                        onPressed: () {
+                                          _deleteProject(project['id']);
+                                        },
+                                      ),
                                     ],
                                   ),
                                 ),

@@ -12,6 +12,10 @@ class CommonData {
   // App-wide User State (Optional: could also stream from FirebaseAuth.instance)
   static String? currentUserId;
   static String? currentUserEmail;
+  static String? currentUserName;
+  static String? pendingAutodeskToken; // For deep-link capture
+
+  static bool showAllIssuesInDashboard = false;
 
   // Theme Variables
   static const Color primaryNeon = Color(0xFF00F2FF);
