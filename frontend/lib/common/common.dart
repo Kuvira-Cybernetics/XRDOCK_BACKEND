@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class CommonData {
   // Backend Configuration
-  static const String backendUrl =
-      'http://localhost:8001'; // Change for production
+
+  //Dev
+  // static const String backendUrl =
+  //     'http://localhost:8001'; // Change for production
+
+  //Prod
+  static const String backendUrl = 'https://api.xrdock.in';
 
   // GOOGLE SIGN-IN CLIENT ID
   static const String googleClientId =
@@ -13,6 +18,7 @@ class CommonData {
   static String? currentUserId;
   static String? currentUserEmail;
   static String? currentUserName;
+  static bool isAutodeskUser = false; // Whether the user has a linked Autodesk account
   static String? pendingAutodeskToken; // For deep-link capture
 
   static bool showAllIssuesInDashboard = false;

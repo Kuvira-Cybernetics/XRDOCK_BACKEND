@@ -126,9 +126,7 @@ class _MainLayoutState extends State<MainLayout> {
                   isSelected: currentRoute == '/dashboard' && !CommonData.showAllIssuesInDashboard,
                   onTap: () {
                     setState(() => CommonData.showAllIssuesInDashboard = false);
-                    if (currentRoute != '/dashboard') {
-                      Navigator.pushReplacementNamed(context, '/dashboard');
-                    }
+                    Navigator.pushReplacementNamed(context, '/dashboard');
                   },
                 ),
                 SidebarItem(
@@ -138,9 +136,7 @@ class _MainLayoutState extends State<MainLayout> {
                   isSelected: currentRoute == '/dashboard' && CommonData.showAllIssuesInDashboard,
                   onTap: () {
                     setState(() => CommonData.showAllIssuesInDashboard = true);
-                    if (currentRoute != '/dashboard') {
-                      Navigator.pushReplacementNamed(context, '/dashboard');
-                    }
+                    Navigator.pushReplacementNamed(context, '/dashboard');
                   },
                 ),
                 SidebarItem(
@@ -149,9 +145,7 @@ class _MainLayoutState extends State<MainLayout> {
                   isCollapsed: _isCollapsed,
                   isSelected: currentRoute == '/profile',
                   onTap: () {
-                    if (currentRoute != '/profile') {
-                      Navigator.pushNamed(context, '/profile');
-                    }
+                    Navigator.pushReplacementNamed(context, '/profile');
                   },
                 ),
                 const Spacer(),

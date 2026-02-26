@@ -296,89 +296,95 @@ class _IssueListPanelState extends State<IssueListPanel> {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'PROJECT ISSUES',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PROJECT ISSUES', 
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
                 ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _showCreateDialog(context),
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text('NEW ISSUE'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _showCreateDialog(context),
+                      icon: const Icon(Icons.add, size: 20),
+                      label: const Text('NEW ISSUE'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _fetchIssues,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (value) {
+                      _searchQuery = value;
+                      _applyFilters();
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'SEARCH BY TITLE...',
+                      prefixIcon: const Icon(Icons.search),
+                      fillColor: isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.02),
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _fetchIssues,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (value) {
-                    _searchQuery = value;
+                ),
+                const SizedBox(width: 12),
+                _buildFilterDropdown(
+                  hint: 'STATUS',
+                  value: _selectedStatus,
+                  items: ['OPEN', 'IN-PROGRESS', 'CLOSED'],
+                  onChanged: (val) {
+                    setState(() => _selectedStatus = val);
                     _applyFilters();
                   },
-                  decoration: InputDecoration(
-                    hintText: 'SEARCH BY TITLE...',
-                    prefixIcon: const Icon(Icons.search),
-                    fillColor: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.black.withOpacity(0.02),
-                    filled: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              _buildFilterDropdown(
-                hint: 'STATUS',
-                value: _selectedStatus,
-                items: ['OPEN', 'IN-PROGRESS', 'CLOSED'],
-                onChanged: (val) {
-                  setState(() => _selectedStatus = val);
-                  _applyFilters();
-                },
-              ),
-              const SizedBox(width: 12),
-              _buildFilterDropdown(
-                hint: 'PRIORITY',
-                value: _selectedPriority,
-                items: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'],
-                onChanged: (val) {
-                  setState(() => _selectedPriority = val);
-                  _applyFilters();
-                },
-              ),
-            ],
+                const SizedBox(width: 12),
+                _buildFilterDropdown(
+                  hint: 'PRIORITY',
+                  value: _selectedPriority,
+                  items: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'],
+                  onChanged: (val) {
+                    setState(() => _selectedPriority = val);
+                    _applyFilters();
+                  },
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           Expanded(
@@ -386,19 +392,22 @@ class _IssueListPanelState extends State<IssueListPanel> {
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredIssues.isEmpty
                 ? const Center(child: Text('NO ISSUES FOUND'))
-                : ListView.separated(
-                    itemCount: _filteredIssues.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final issue = _filteredIssues[index];
-                      return _IssueTile(
-                        issue: issue,
-                        onDelete: () => _deleteIssue(issue['id']),
-                        onEdit: (updatedData) =>
-                            _updateIssue(issue['id'], updatedData),
-                      );
-                    },
+                : Scrollbar(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      itemCount: _filteredIssues.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final issue = _filteredIssues[index];
+                        return _IssueTile(
+                          issue: issue,
+                          onDelete: () => _deleteIssue(issue['id']),
+                          onEdit: (updatedData) =>
+                              _updateIssue(issue['id'], updatedData),
+                        );
+                      },
+                    ),
                   ),
           ),
         ],

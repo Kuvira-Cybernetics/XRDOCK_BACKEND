@@ -301,139 +301,145 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   Widget _buildUsersTable() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        PaginatedDataTable(
-          header: const Text('Users'),
-          columns: const [
-            DataColumn(label: Text('ID')),
-            DataColumn(label: Text('Email')),
-            DataColumn(label: Text('Name')),
-            DataColumn(label: Text('Company')),
-            DataColumn(label: Text('Actions')),
-          ],
-          source: _DataSource(_users, (user) {
-            return DataRow(
-              cells: [
-                DataCell(Text(user['id'].toString())),
-                DataCell(Text(user['email']?.toString() ?? '')),
-                DataCell(Text(user['name']?.toString() ?? '')),
-                DataCell(Text(user['company_name']?.toString() ?? '')),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showEditUserDialog(user),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteRecord('users', user['id']),
-                      ),
-                    ],
+    return Scrollbar(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          PaginatedDataTable(
+            header: const Text('Users'),
+            columns: const [
+              DataColumn(label: Text('ID')),
+              DataColumn(label: Text('Email')),
+              DataColumn(label: Text('Name')),
+              DataColumn(label: Text('Company')),
+              DataColumn(label: Text('Actions')),
+            ],
+            source: _DataSource(_users, (user) {
+              return DataRow(
+                cells: [
+                  DataCell(Text(user['id'].toString())),
+                  DataCell(Text(user['email']?.toString() ?? '')),
+                  DataCell(Text(user['name']?.toString() ?? '')),
+                  DataCell(Text(user['company_name']?.toString() ?? '')),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () => _showEditUserDialog(user),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteRecord('users', user['id']),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            );
-          }),
-        ),
-      ],
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildProjectsTable() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        PaginatedDataTable(
-          header: const Text('Projects'),
-          columns: const [
-            DataColumn(label: Text('ID')),
-            DataColumn(label: Text('Name')),
-            DataColumn(label: Text('Created At')),
-            DataColumn(label: Text('Actions')),
-          ],
-          source: _DataSource(_projects, (proj) {
-            return DataRow(
-              cells: [
-                DataCell(Text(proj['id'].toString())),
-                DataCell(Text(proj['name']?.toString() ?? '')),
-                DataCell(
-                  Text(
-                    proj['created_at']?.toString() != null
-                        ? proj['created_at'].toString().split('T')[0]
-                        : '',
+    return Scrollbar(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          PaginatedDataTable(
+            header: const Text('Projects'),
+            columns: const [
+              DataColumn(label: Text('ID')),
+              DataColumn(label: Text('Name')),
+              DataColumn(label: Text('Created At')),
+              DataColumn(label: Text('Actions')),
+            ],
+            source: _DataSource(_projects, (proj) {
+              return DataRow(
+                cells: [
+                  DataCell(Text(proj['id'].toString())),
+                  DataCell(Text(proj['name']?.toString() ?? '')),
+                  DataCell(
+                    Text(
+                      proj['created_at']?.toString() != null
+                          ? proj['created_at'].toString().split('T')[0]
+                          : '',
+                    ),
                   ),
-                ),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showEditProjectDialog(proj),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteRecord('projects', proj['id']),
-                      ),
-                    ],
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () => _showEditProjectDialog(proj),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteRecord('projects', proj['id']),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            );
-          }),
-        ),
-      ],
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildIssuesTable() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        PaginatedDataTable(
-          header: const Text('Issues'),
-          columns: const [
-            DataColumn(label: Text('ID')),
-            DataColumn(label: Text('Title')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Priority')),
-            DataColumn(label: Text('Project ID')),
-            DataColumn(label: Text('Actions')),
-          ],
-          source: _DataSource(_issues, (issue) {
-            return DataRow(
-              cells: [
-                DataCell(Text(issue['id'].toString())),
-                DataCell(Text(issue['title']?.toString() ?? '')),
-                DataCell(Text(issue['status']?.toString().toUpperCase() ?? '')),
-                DataCell(
-                  Text(issue['priority']?.toString().toUpperCase() ?? ''),
-                ),
-                DataCell(Text(issue['project_id']?.toString() ?? '')),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showEditIssueDialog(issue),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteRecord('issues', issue['id']),
-                      ),
-                    ],
+    return Scrollbar(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          PaginatedDataTable(
+            header: const Text('Issues'),
+            columns: const [
+              DataColumn(label: Text('ID')),
+              DataColumn(label: Text('Title')),
+              DataColumn(label: Text('Status')),
+              DataColumn(label: Text('Priority')),
+              DataColumn(label: Text('Project ID')),
+              DataColumn(label: Text('Actions')),
+            ],
+            source: _DataSource(_issues, (issue) {
+              return DataRow(
+                cells: [
+                  DataCell(Text(issue['id'].toString())),
+                  DataCell(Text(issue['title']?.toString() ?? '')),
+                  DataCell(Text(issue['status']?.toString().toUpperCase() ?? '')),
+                  DataCell(
+                    Text(issue['priority']?.toString().toUpperCase() ?? ''),
                   ),
-                ),
-              ],
-            );
-          }),
-        ),
-      ],
+                  DataCell(Text(issue['project_id']?.toString() ?? '')),
+                  DataCell(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () => _showEditIssueDialog(issue),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteRecord('issues', issue['id']),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 

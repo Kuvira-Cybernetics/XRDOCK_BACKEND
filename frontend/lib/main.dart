@@ -11,6 +11,20 @@ import 'screens/admin_screen.dart';
 import 'common/common.dart';
 import 'widgets/main_layout.dart';
 
+class NoTransitionsBuilder extends PageTransitionsBuilder {
+  const NoTransitionsBuilder();
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -58,8 +72,28 @@ class _XRDockAppState extends State<XRDockApp> {
     return MaterialApp(
       title: 'XR-DOCK BIM',
       debugShowCheckedModeBanner: false,
-      theme: XRDockTheme.lightTheme,
-      darkTheme: XRDockTheme.darkTheme,
+      theme: XRDockTheme.lightTheme.copyWith(
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: NoTransitionsBuilder(),
+            TargetPlatform.iOS: NoTransitionsBuilder(),
+            TargetPlatform.windows: NoTransitionsBuilder(),
+            TargetPlatform.macOS: NoTransitionsBuilder(),
+            TargetPlatform.linux: NoTransitionsBuilder(),
+          },
+        ),
+      ),
+      darkTheme: XRDockTheme.darkTheme.copyWith(
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: NoTransitionsBuilder(),
+            TargetPlatform.iOS: NoTransitionsBuilder(),
+            TargetPlatform.windows: NoTransitionsBuilder(),
+            TargetPlatform.macOS: NoTransitionsBuilder(),
+            TargetPlatform.linux: NoTransitionsBuilder(),
+          },
+        ),
+      ),
       themeMode: _themeMode,
       initialRoute: '/',
       routes: {

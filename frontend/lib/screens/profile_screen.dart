@@ -220,8 +220,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -231,68 +229,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 900;
-          return Center(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1100),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF15191C) : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                          blurRadius: 30,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 1. Top Gradient Banner
-                        _buildGradientBanner(isDark),
-
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // 2. Profile Header Row
-                              _buildProfileHeader(user, isDark),
-
-                              const SizedBox(height: 32),
-
-                              if (_isLoadingProfile)
-                                const Center(child: Padding(padding: EdgeInsets.all(64), child: CircularProgressIndicator()))
-                              else ...[
-                                // 3. Form Grid
-                                _buildFormGrid(isDesktop, isDark),
-
-                                const SizedBox(height: 48),
-
-                                // 4. Email Section
-                                _buildEmailSection(user, isDark),
-                                
-                                const SizedBox(height: 32),
-                                _buildSubscriptionSummary(plan, isAdmin, isDark),
-                              ],
-                            ],
+      body: Scrollbar(
+        child: SingleChildScrollView(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth > 900;
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 32.0,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF15191C) : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(
+                              isDark ? 0.3 : 0.05,
+                            ),
+                            blurRadius: 30,
+                            offset: const Offset(0, 10),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 1. Top Gradient Banner
+                          _buildGradientBanner(isDark),
+
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // 2. Profile Header Row
+                                _buildProfileHeader(user, isDark),
+
+                                const SizedBox(height: 32),
+
+                                if (_isLoadingProfile)
+                                  const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(64),
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  )
+                                else ...[
+                                  // 3. Form Grid
+                                  _buildFormGrid(isDesktop, isDark),
+
+                                  const SizedBox(height: 48),
+
+                                  // 4. Email Section
+                                  _buildEmailSection(user, isDark),
+
+                                  const SizedBox(height: 32),
+                                  _buildSubscriptionSummary(
+                                    plan,
+                                    isAdmin,
+                                    isDark,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -304,9 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         gradient: LinearGradient(
-          colors: isDark 
-            ? [const Color(0xFF2C3E50), const Color(0xFF4CA1AF)]
-            : [const Color(0xFFE0EAFC), const Color(0xFFCFDEF3)],
+          colors: isDark
+              ? [const Color(0xFF2C3E50), const Color(0xFF4CA1AF)]
+              : [const Color(0xFFE0EAFC), const Color(0xFFCFDEF3)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -326,20 +340,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: isDark ? const Color(0xFF15191C) : Colors.white, width: 4),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF15191C) : Colors.white,
+                    width: 4,
+                  ),
                 ),
                 child: CircleAvatar(
                   radius: 50,
                   backgroundColor: isDark ? Colors.grey[800] : Colors.grey[200],
-                  backgroundImage: _base64Image != null && _base64Image!.isNotEmpty
+                  backgroundImage:
+                      _base64Image != null && _base64Image!.isNotEmpty
                       ? MemoryImage(base64Decode(_base64Image!))
-                      : (user?.photoURL != null ? NetworkImage(user!.photoURL!) as ImageProvider : null),
-                  child: (_base64Image == null || _base64Image!.isEmpty) && user?.photoURL == null
+                      : (user?.photoURL != null
+                            ? NetworkImage(user!.photoURL!) as ImageProvider
+                            : null),
+                  child:
+                      (_base64Image == null || _base64Image!.isEmpty) &&
+                          user?.photoURL == null
                       ? Text(
-                          (_nameController.text.isNotEmpty ? _nameController.text : (user?.email ?? '?'))
+                          (_nameController.text.isNotEmpty
+                                  ? _nameController.text
+                                  : (user?.email ?? '?'))
                               .substring(0, 1)
                               .toUpperCase(),
-                          style: TextStyle(fontSize: 40, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 40,
+                            color: Theme.of(context).primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
                         )
                       : null,
                 ),
@@ -352,7 +380,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: CircleAvatar(
                     radius: 16,
                     backgroundColor: Theme.of(context).primaryColor,
-                    child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      size: 16,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -366,8 +398,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _nameController.text.isEmpty ? 'New User' : _nameController.text,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  _nameController.text.isEmpty
+                      ? 'New User'
+                      : _nameController.text,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -384,12 +421,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               elevation: 0,
             ),
-            child: _isLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Save Changes',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
           ),
         ],
       ),
@@ -412,21 +461,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         _buildSectionHeader('Company Details', isDark),
         _buildResponsiveRow(isDesktop, [
-          _buildModernField(_companyNameController, "Company Name", "Your Company"),
-          _buildModernField(_companyWebsiteController, "Website", "e.g. https://..."),
+          _buildModernField(
+            _companyNameController,
+            "Company Name",
+            "Your Company",
+          ),
+          _buildModernField(
+            _companyWebsiteController,
+            "Website",
+            "e.g. https://...",
+          ),
         ]),
         _buildResponsiveRow(isDesktop, [
-          _buildModernField(_industryController, "Industry", "e.g. Construction"),
-          _buildModernField(_employeeCountController, "Company Size", "e.g. 1-10"),
+          _buildModernField(
+            _industryController,
+            "Industry",
+            "e.g. Construction",
+          ),
+          _buildModernField(
+            _employeeCountController,
+            "Company Size",
+            "e.g. 1-10",
+          ),
         ]),
         _buildResponsiveRow(isDesktop, [
           _buildModernCountryDropdown(isDark),
-          _buildModernField(_projectTypeController, "Project Type", "e.g. Simulation"),
+          _buildModernField(
+            _projectTypeController,
+            "Project Type",
+            "e.g. Simulation",
+          ),
         ]),
 
         _buildSectionHeader('Primary Use Case', isDark),
         _buildResponsiveRow(isDesktop, [
-          _buildModernField(_expectedSeatsController, "Expected Seats", "Quantity", isNumber: true),
+          _buildModernField(
+            _expectedSeatsController,
+            "Expected Seats",
+            "Quantity",
+            isNumber: true,
+          ),
           const SizedBox.shrink(), // Spacer for balance
         ]),
       ],
@@ -462,13 +536,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildModernField(TextEditingController controller, String label, String hint, {bool isNumber = false}) {
+  Widget _buildModernField(
+    TextEditingController controller,
+    String label,
+    String hint, {
+    bool isNumber = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           TextFormField(
             controller: controller,
@@ -477,9 +559,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
               filled: true,
-              fillColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              fillColor: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.grey[100],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
         ],
@@ -493,20 +583,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Country", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const Text(
+            "Country",
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: _countryController.text.isEmpty ? null : _countryController.text,
+            value: _countryController.text.isEmpty
+                ? null
+                : _countryController.text,
             decoration: InputDecoration(
               filled: true,
-              fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              fillColor: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.grey[100],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
-            items: ['United States', 'India', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Other']
-                .map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 14))))
-                .toList(),
-            onChanged: (val) { if (val != null) setState(() => _countryController.text = val); },
+            items:
+                [
+                      'United States',
+                      'India',
+                      'United Kingdom',
+                      'Canada',
+                      'Australia',
+                      'Germany',
+                      'France',
+                      'Other',
+                    ]
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(c, style: const TextStyle(fontSize: 14)),
+                      ),
+                    )
+                    .toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _countryController.text = val);
+            },
           ),
         ],
       ),
@@ -517,29 +637,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("My email Address", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const Text(
+          "My email Address",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.05) : Colors.blue[50]?.withOpacity(0.4),
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.blue[50]?.withOpacity(0.4),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: isDark ? Colors.blue.withOpacity(0.2) : Colors.blue[100],
-                child: const Icon(Icons.email_outlined, color: Colors.blue, size: 18),
+                backgroundColor: isDark
+                    ? Colors.blue.withOpacity(0.2)
+                    : Colors.blue[100],
+                child: const Icon(
+                  Icons.email_outlined,
+                  color: Colors.blue,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user?.email ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(
+                      user?.email ?? 'N/A',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text("Primary Email", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                    Text(
+                      "Primary Email",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                    ),
                   ],
                 ),
               ),
@@ -561,11 +701,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   isAdmin ? 'Plan: ADMIN' : 'Plan: ${plan.toUpperCase()}',
-                  style: TextStyle(color: _planColor(plan), fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(
+                    color: _planColor(plan),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isAdmin ? 'Perpetual Access' : _formatExpiry(_backendUser?['subscription_expiry']),
+                  isAdmin
+                      ? 'Perpetual Access'
+                      : _formatExpiry(_backendUser?['subscription_expiry']),
                   style: TextStyle(color: Colors.grey[500], fontSize: 11),
                 ),
               ],
@@ -577,10 +723,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _planColor(plan),
                   side: BorderSide(color: _planColor(plan).withOpacity(0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                 ),
-                child: const Text('RENEW / UPGRADE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'RENEW / UPGRADE',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ],

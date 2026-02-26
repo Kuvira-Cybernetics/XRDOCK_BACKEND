@@ -66,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         CommonData.currentUserName = userData['name'];
         CommonData.currentUserEmail = userData['email'];
         CommonData.currentUserId = userData['uid'];
+        CommonData.isAutodeskUser = userData.containsKey('autodesk_id') && userData['autodesk_id'] != null;
         
         final expiryStr = userData['subscription_expiry'];
         final isAdmin = userData['is_admin'] == true;
@@ -644,36 +645,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildProjectGallery(bool isDark) {
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'PROJECTS',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3,
-                  fontSize: 22,
-                  color: Theme.of(context).primaryColor,
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: _showAutodeskImportDialog,
-                icon: const Icon(Icons.cloud_download_outlined),
-                label: const Text('IMPORT FROM AUTODESK'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PROJECTS',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 3,
+                    fontSize: 22,
+                    color: Theme.of(context).primaryColor,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
+              if (CommonData.isAutodeskUser) ...[
+                ElevatedButton.icon(
+                  onPressed: _showAutodeskImportDialog,
+                  icon: const Icon(Icons.cloud_download_outlined),
+                  label: const Text('IMPORT FROM AUTODESK'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
               ElevatedButton.icon(
                 onPressed: _showCreateProjectDialog,
                 icon: const Icon(Icons.add),
@@ -689,25 +694,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Select a project to render in 3D',
-            style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+        ),
+        const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Select a project to render in 3D',
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+            ),
           ),
           const SizedBox(height: 24),
           Expanded(
             child: _isLoadingProjects
                 ? const Center(child: CircularProgressIndicator())
-                : GridView.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 280,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.85,
-                        ),
-                    itemCount: _projects.length,
-                    itemBuilder: (context, i) {
+                : Scrollbar(
+                    child: GridView.builder(
+                      padding: const EdgeInsets.all(32),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 280,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.85,
+                          ),
+                      itemCount: _projects.length,
+                      itemBuilder: (context, i) {
                       final project = _projects[i];
                       final isSelected = _selectedProjectId == project['id'];
                       return GestureDetector(
@@ -865,6 +876,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     },
                   ),
+                ),
           ),
         ],
       ),

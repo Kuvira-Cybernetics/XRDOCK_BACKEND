@@ -161,56 +161,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 24),
-        TextFormField(
-          controller: _nameController,
-          decoration: const InputDecoration(labelText: 'FULL NAME'),
-          validator: (v) => v!.isEmpty ? 'Name required' : null,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'FULL NAME'),
+                validator: (v) => v!.isEmpty ? 'Name required' : null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _jobTitleController,
+                decoration: const InputDecoration(labelText: 'JOB TITLE / ROLE'),
+                validator: (v) => v!.isEmpty ? 'Job title required' : null,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        TextFormField(
-          controller: _jobTitleController,
-          decoration: const InputDecoration(labelText: 'JOB TITLE / ROLE'),
-          validator: (v) => v!.isEmpty ? 'Job title required' : null,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'WORK EMAIL'),
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Email required';
+                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                  if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: 'PHONE NUMBER'),
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v != null && v.isNotEmpty) {
+                    final phoneRegex = RegExp(r'^\+?[\d\s-]{10,}$');
+                    if (!phoneRegex.hasMatch(v)) return 'Enter a valid phone number';
+                  }
+                  return null;
+                },
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        TextFormField(
-          controller: _emailController,
-          decoration: const InputDecoration(labelText: 'WORK EMAIL'),
-          keyboardType: TextInputType.emailAddress,
-          validator: (v) {
-            if (v == null || v.isEmpty) return 'Email required';
-            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-            if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _phoneController,
-          decoration: const InputDecoration(labelText: 'PHONE NUMBER'),
-          keyboardType: TextInputType.phone,
-          validator: (v) {
-            if (v != null && v.isNotEmpty) {
-              final phoneRegex = RegExp(r'^\+?[\d\s-]{10,}$');
-              if (!phoneRegex.hasMatch(v)) return 'Enter a valid phone number';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'PASSWORD'),
-          validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _confirmPasswordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'CONFIRM PASSWORD'),
-          validator: (v) =>
-              v != _passwordController.text ? 'Passwords match fail' : null,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'PASSWORD'),
+                validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'CONFIRM PASSWORD'),
+                validator: (v) =>
+                    v != _passwordController.text ? 'Passwords match fail' : null,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -225,27 +249,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 24),
-        TextFormField(
-          controller: _companyNameController,
-          decoration: const InputDecoration(labelText: 'COMPANY NAME'),
-          validator: (v) => v!.isEmpty ? 'Company name required' : null,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _companyNameController,
+                decoration: const InputDecoration(labelText: 'COMPANY NAME'),
+                validator: (v) => v!.isEmpty ? 'Company name required' : null,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _companyWebsiteController,
+                decoration: const InputDecoration(labelText: 'COMPANY WEBSITE'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        TextFormField(
-          controller: _companyWebsiteController,
-          decoration: const InputDecoration(labelText: 'COMPANY WEBSITE'),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _industryController,
-          decoration: const InputDecoration(labelText: 'INDUSTRY'),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _employeeCountController,
-          decoration: const InputDecoration(
-            labelText: 'EMPLOYEE COUNT (e.g., 50-200)',
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _industryController,
+                decoration: const InputDecoration(labelText: 'INDUSTRY'),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _employeeCountController,
+                decoration: const InputDecoration(
+                  labelText: 'EMPLOYEE COUNT (e.g., 50-200)',
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
@@ -287,19 +327,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 24),
-        TextFormField(
-          controller: _projectTypeController,
-          decoration: const InputDecoration(
-            labelText: 'PROJECT TYPE (e.g. Simulation, Inspection)',
-          ),
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _expectedSeatsController,
-          decoration: const InputDecoration(
-            labelText: 'EXPECTED NUMBER OF SEATS',
-          ),
-          keyboardType: TextInputType.number,
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _projectTypeController,
+                decoration: const InputDecoration(
+                  labelText: 'PROJECT TYPE',
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextFormField(
+                controller: _expectedSeatsController,
+                decoration: const InputDecoration(
+                  labelText: 'EXPECTED NUMBER OF SEATS',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         TextFormField(
@@ -325,10 +373,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       currentStepWidget = _buildUseCaseStep();
 
     return Scaffold(
-      body: Center(
+      body: Scrollbar(
+        thumbVisibility: true, // Optional but good for desktop
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Column(
+          child: Center(
+            child: Column(
             children: [
               Text(
                 'JOIN XR-DOCK',
@@ -340,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                   child: Container(
-                    width: 500,
+                    width: 750,
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
                       color: isDark
@@ -467,6 +517,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),
