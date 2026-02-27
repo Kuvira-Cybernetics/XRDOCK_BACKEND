@@ -131,20 +131,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
       if (response.statusCode == 200 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CommonData.showCustomSnackBar(context, 'Profile updated successfully!');
       } else if (mounted) {
         throw Exception('Failed to update profile on backend.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        CommonData.showCustomSnackBar(context, 'Error: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

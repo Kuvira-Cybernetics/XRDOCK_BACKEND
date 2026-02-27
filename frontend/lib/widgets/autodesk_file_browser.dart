@@ -25,6 +25,7 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
   String? _selectedHubId;
   String? _selectedProjectId;
   String? _selectedFolderId;
+  List<String> _folderHistory = [];
 
   @override
   void initState() {
@@ -69,6 +70,8 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
       _projects = [];
       _folders = [];
       _contents = [];
+      _selectedFolderId = null;
+      _folderHistory = [];
     });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -96,6 +99,8 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
       _selectedProjectId = projectId;
       _folders = [];
       _contents = [];
+      _selectedFolderId = null;
+      _folderHistory = [];
     });
     try {
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -119,7 +124,13 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
     }
   }
 
-  Future<void> _fetchFolderContents(String folderId) async {
+  Future<void> _fetchFolderContents(
+    String folderId, {
+    bool isBack = false,
+  }) async {
+    if (!isBack && _selectedFolderId != null) {
+      _folderHistory.add(_selectedFolderId!);
+    }
     setState(() {
       _isLoading = true;
       _selectedFolderId = folderId;
@@ -166,17 +177,32 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
     }
 
     if (_selectedFolderId != null) {
-      return _buildListView(_contents, 'CONTENTS', (item) {
-        if (item['type'] == 'items') {
-          widget.onFileSelected(
-            _selectedProjectId!,
-            item['id'],
-            item['attributes']['displayName'],
-          );
-        } else if (item['type'] == 'folders') {
-          _fetchFolderContents(item['id']);
-        }
-      }, onBack: () => setState(() => _selectedFolderId = null));
+      return _buildListView(
+        _contents,
+        'CONTENTS',
+        (item) {
+          if (item['type'] == 'items') {
+            // If the attributes are missing, pass the item ID as a fallback name.
+            final attrs = item['attributes'] as Map<String, dynamic>?;
+            final displayName =
+                attrs?['displayName'] ??
+                attrs?['name'] ??
+                item['id'] ??
+                'Unknown File';
+            widget.onFileSelected(_selectedProjectId!, item['id'], displayName);
+          } else if (item['type'] == 'folders') {
+            _fetchFolderContents(item['id']);
+          }
+        },
+        onBack: () {
+          if (_folderHistory.isNotEmpty) {
+            final prevFolder = _folderHistory.removeLast();
+            _fetchFolderContents(prevFolder, isBack: true);
+          } else {
+            setState(() => _selectedFolderId = null);
+          }
+        },
+      );
     }
 
     if (_selectedProjectId != null) {
@@ -224,20 +250,28 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
+                    final attrs = item['attributes'] as Map<String, dynamic>?;
                     final name =
-                        item['attributes']?['name'] ??
-                        item['attributes']?['displayName'] ??
+                        attrs?['name'] ??
+                        attrs?['displayName'] ??
+                        item['id'] ??
                         'Unknown';
+
+                    final type = item['type'] ?? 'unknown';
                     final isFolder =
-                        item['type'] == 'folders' ||
-                        item['type'] == 'hubs' ||
-                        item['type'] == 'projects';
+                        type == 'folders' ||
+                        type == 'hubs' ||
+                        type == 'projects';
+
                     return ListTile(
                       leading: Icon(
                         isFolder ? Icons.folder : Icons.insert_drive_file,
                       ),
-                      title: Text(name),
-                      onTap: () => onTap(item),
+                      title: Text('$name ($type)'),
+                      onTap: () {
+                        // Let items and folders be clickable, log if clicked something else
+                        onTap(item);
+                      },
                     );
                   },
                 ),

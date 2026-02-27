@@ -83,8 +83,10 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (e) {
         debugPrint('Custom token sign-in error: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Autodesk sign-in failed: $e')),
+          CommonData.showCustomSnackBar(
+            context,
+            'Autodesk sign-in failed: $e',
+            isError: true,
           );
         }
       } finally {
@@ -107,9 +109,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        CommonData.showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.message ?? 'Login failed')));
+          e.message ?? 'Login failed',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -140,9 +144,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        CommonData.showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text('Google Sign-In error: $e')));
+          'Google Sign-In error: $e',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -359,9 +365,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        CommonData.showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text('Autodesk login error: $e')));
+          'Autodesk login error: $e',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

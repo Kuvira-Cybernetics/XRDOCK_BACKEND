@@ -21,7 +21,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   void _logout({bool force = false}) async {
     await FirebaseAuth.instance.signOut();
-    
+
     // Clear global state
     CommonData.currentUserId = null;
     CommonData.currentUserEmail = null;
@@ -44,7 +44,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _detailTab = 0; // 0: 3D viewer, 1: issues
 
   bool get _showAllIssues => CommonData.showAllIssuesInDashboard;
-  bool get _showProjectGallery => !CommonData.showAllIssuesInDashboard && _selectedProject == null;
+  bool get _showProjectGallery =>
+      !CommonData.showAllIssuesInDashboard && _selectedProject == null;
 
   @override
   void initState() {
@@ -61,13 +62,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       if (response.statusCode == 200) {
         final userData = json.decode(response.body);
-        
+
         // Sync user details to global state
         CommonData.currentUserName = userData['name'];
         CommonData.currentUserEmail = userData['email'];
         CommonData.currentUserId = userData['uid'];
-        CommonData.isAutodeskUser = userData.containsKey('autodesk_id') && userData['autodesk_id'] != null;
-        
+        CommonData.isAutodeskUser =
+            userData.containsKey('autodesk_id') &&
+            userData['autodesk_id'] != null;
+
         final expiryStr = userData['subscription_expiry'];
         final isAdmin = userData['is_admin'] == true;
         if (!isAdmin && expiryStr != null) {
@@ -150,6 +153,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (modelFile != null) {
           await _uploadModel(newProject['id'], modelFile);
         }
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Project created');
+        }
         _fetchProjects();
       }
     } catch (e) {
@@ -200,6 +206,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _selectedModelFile = null;
           });
         }
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Project deleted');
+        }
         _fetchProjects();
       }
     } catch (e) {
@@ -231,6 +240,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           setState(() {
             _selectedProject!['name'] = name;
           });
+        }
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Project updated');
         }
         _fetchProjects();
       }
@@ -437,23 +449,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }),
       );
       if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Import started. Translation in progress...'),
-            ),
-          );
+          if (data['translation_status'] == 'already_imported') {
+            CommonData.showCustomSnackBar(context, 'Synced');
+          } else {
+            CommonData.showCustomSnackBar(context, 'Synced');
+          }
         }
         _fetchProjects();
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Import failed: ${response.body}')),
+          CommonData.showCustomSnackBar(
+            context,
+            'Import failed: ${response.statusCode}',
+            isError: true,
           );
         }
       }
     } catch (e) {
       debugPrint('Error importing Autodesk file: $e');
+      if (mounted) {
+        CommonData.showCustomSnackBar(
+          context,
+          'An error occurred during import',
+          isError: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoadingProjects = false);
     }
@@ -466,7 +488,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -476,29 +497,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: _showAllIssues
           ? _buildAllIssuesView(isDark)
           : _showProjectGallery
-              ? _buildProjectGallery(isDark)
-              : _selectedProject != null
-                  ? _buildProjectDetail(isDark)
-                  : Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.folder_open_outlined,
-                            size: 64,
-                            color: Theme.of(context).primaryColor.withOpacity(0.3),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'Select a project from the sidebar',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+          ? _buildProjectGallery(isDark)
+          : _selectedProject != null
+          ? _buildProjectDetail(isDark)
+          : Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.folder_open_outlined,
+                    size: 64,
+                    color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Select a project from the sidebar',
+                    style: TextStyle(color: Colors.grey, letterSpacing: 1),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -663,13 +681,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Theme.of(context).primaryColor,
                   ),
                 ),
-              if (CommonData.isAutodeskUser) ...[
+                if (CommonData.isAutodeskUser) ...[
+                  ElevatedButton.icon(
+                    onPressed: _showAutodeskImportDialog,
+                    icon: const Icon(Icons.cloud_download_outlined),
+                    label: const Text('IMPORT FROM AUTODESK'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 ElevatedButton.icon(
-                  onPressed: _showAutodeskImportDialog,
-                  icon: const Icon(Icons.cloud_download_outlined),
-                  label: const Text('IMPORT FROM AUTODESK'),
+                  onPressed: _showCreateProjectDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('NEW PROJECT'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -677,25 +710,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
               ],
-              ElevatedButton.icon(
-                onPressed: _showCreateProjectDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('NEW PROJECT'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
@@ -719,164 +737,205 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                       itemCount: _projects.length,
                       itemBuilder: (context, i) {
-                      final project = _projects[i];
-                      final isSelected = _selectedProjectId == project['id'];
-                      return GestureDetector(
-                        onTap: () => _openProject(
-                          Map<String, dynamic>.from(project as Map),
-                        ),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Theme.of(context).primaryColor
-                                  : Colors.transparent,
-                              width: 2.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: isSelected
-                                    ? Theme.of(
-                                        context,
-                                      ).primaryColor.withOpacity(0.35)
-                                    : Colors.black.withOpacity(0.08),
-                                blurRadius: isSelected ? 20 : 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                        final project = _projects[i];
+                        final isSelected = _selectedProjectId == project['id'];
+                        return GestureDetector(
+                          onTap: () => _openProject(
+                            Map<String, dynamic>.from(project as Map),
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ModelViewer(
-                                  key: ValueKey('thumb_${project['id']}'),
-                                  backgroundColor: isDark
-                                      ? const Color(0xFF1A2035)
-                                      : Colors.grey.shade100,
-                                  src:
-                                      '${CommonData.backendUrl}/static/models/${project['model_filename']}',
-                                  alt: project['name'],
-                                  ar: false,
-                                  autoRotate: true,
-                                  cameraControls: false, // strictly a thumbnail
-                                  disableZoom: true,
-                                  interactionPrompt: InteractionPrompt.none,
-                                ),
-                                // Dark gradient at bottom
-                                Positioned.fill(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          Colors.transparent,
-                                          Colors.black.withOpacity(0.7),
-                                        ],
-                                        stops: const [0.5, 1.0],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 14,
-                                  left: 14,
-                                  right: 14,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              (project['name'] as String)
-                                                  .toUpperCase(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13,
-                                                letterSpacing: 0.8,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            if (isSelected)
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 2,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).primaryColor,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                                child: const Text(
-                                                  'ACTIVE',
-                                                  style: TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.black,
-                                                    letterSpacing: 1,
-                                                  ),
-                                                ),
-                                              )
-                                            else
-                                              const Text(
-                                                'TAP TO RENDER',
-                                                style: TextStyle(
-                                                  color: Colors.white60,
-                                                  fontSize: 10,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.edit_outlined,
-                                          color: Colors.blueGrey,
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          _showEditProjectDialog(
-                                            Map<String, dynamic>.from(
-                                              project as Map,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          color: Colors.redAccent,
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          _deleteProject(project['id']);
-                                        },
-                                      ),
-                                    ],
-                                  ),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Theme.of(context).primaryColor
+                                    : Colors.transparent,
+                                width: 2.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: isSelected
+                                      ? Theme.of(
+                                          context,
+                                        ).primaryColor.withOpacity(0.35)
+                                      : Colors.black.withOpacity(0.08),
+                                  blurRadius: isSelected ? 20 : 8,
+                                  offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ModelViewer(
+                                    key: ValueKey('thumb_${project['id']}'),
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF1A2035)
+                                        : Colors.grey.shade100,
+                                    src:
+                                        '${CommonData.backendUrl}/static/models/${project['model_filename']}',
+                                    alt: project['name'],
+                                    ar: false,
+                                    autoRotate: true,
+                                    cameraControls:
+                                        false, // strictly a thumbnail
+                                    disableZoom: true,
+                                    interactionPrompt: InteractionPrompt.none,
+                                  ),
+                                  // Dark gradient at bottom
+                                  Positioned.fill(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            Colors.transparent,
+                                            Colors.black.withOpacity(0.7),
+                                          ],
+                                          stops: const [0.5, 1.0],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 14,
+                                    left: 14,
+                                    right: 14,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                (project['name'] as String)
+                                                    .toUpperCase(),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13,
+                                                  letterSpacing: 0.8,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              if (isSelected)
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).primaryColor,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: const Text(
+                                                    'ACTIVE',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black,
+                                                      letterSpacing: 1,
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                const Text(
+                                                  'TAP TO RENDER',
+                                                  style: TextStyle(
+                                                    color: Colors.white60,
+                                                    fontSize: 10,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: Colors.blueGrey,
+                                            size: 20,
+                                          ),
+                                          onPressed: () {
+                                            _showEditProjectDialog(
+                                              Map<String, dynamic>.from(
+                                                project as Map,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.redAccent,
+                                            size: 20,
+                                          ),
+                                          onPressed: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text(
+                                                  'Delete Project?',
+                                                ),
+                                                content: const Text(
+                                                  'This action cannot be undone. All issues associated with this project will also be deleted.',
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(ctx),
+                                                    child: const Text('CANCEL'),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style:
+                                                        ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              Colors.redAccent,
+                                                        ),
+                                                    onPressed: () {
+                                                      Navigator.pop(ctx);
+                                                      _deleteProject(
+                                                        project['id'],
+                                                      );
+                                                    },
+                                                    child: const Text(
+                                                      'DELETE',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
           ),
         ],
       ),

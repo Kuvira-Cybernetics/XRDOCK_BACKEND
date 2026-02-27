@@ -69,11 +69,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please register or log in first to subscribe.'),
-            backgroundColor: Colors.orange,
-          ),
+        CommonData.showCustomSnackBar(
+          context,
+          'Please register or log in first to subscribe.',
+          isError: true,
         );
         await Future.delayed(const Duration(milliseconds: 800));
         if (mounted) Navigator.pushNamed(context, '/register');
@@ -95,11 +94,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       if (response.statusCode == 200) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Subscribed to $planId plan! Welcome aboard 🚀'),
-              backgroundColor: Colors.green.shade700,
-            ),
+          CommonData.showCustomSnackBar(
+            context,
+            'Subscribed to $planId plan! Welcome aboard 🚀',
           );
           await Future.delayed(const Duration(seconds: 1));
           if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
@@ -107,24 +104,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       } else {
         final body = json.decode(response.body);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                body['detail'] ?? 'Subscription failed. Try again.',
-              ),
-              backgroundColor: Colors.red.shade700,
-            ),
+          CommonData.showCustomSnackBar(
+            context,
+            body['detail'] ?? 'Subscription failed. Try again.',
+            isError: true,
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
+        CommonData.showCustomSnackBar(context, 'Error: $e', isError: true);
       }
     } finally {
       if (mounted)

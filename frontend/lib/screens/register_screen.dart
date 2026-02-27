@@ -105,8 +105,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Registration failed')),
+        CommonData.showCustomSnackBar(
+          context,
+          e.message ?? 'Registration failed',
+          isError: true,
         );
       }
     } finally {
@@ -144,9 +146,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        CommonData.showCustomSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text('Google Sign-Up failed: $e')));
+          'Google Sign-Up failed: $e',
+          isError: true,
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -174,7 +178,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Expanded(
               child: TextFormField(
                 controller: _jobTitleController,
-                decoration: const InputDecoration(labelText: 'JOB TITLE / ROLE'),
+                decoration: const InputDecoration(
+                  labelText: 'JOB TITLE / ROLE',
+                ),
                 validator: (v) => v!.isEmpty ? 'Job title required' : null,
               ),
             ),
@@ -190,8 +196,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Email required';
-                  final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                  if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
+                  final emailRegex = RegExp(
+                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                  );
+                  if (!emailRegex.hasMatch(v))
+                    return 'Enter a valid email address';
                   return null;
                 },
               ),
@@ -205,7 +214,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 validator: (v) {
                   if (v != null && v.isNotEmpty) {
                     final phoneRegex = RegExp(r'^\+?[\d\s-]{10,}$');
-                    if (!phoneRegex.hasMatch(v)) return 'Enter a valid phone number';
+                    if (!phoneRegex.hasMatch(v))
+                      return 'Enter a valid phone number';
                   }
                   return null;
                 },
@@ -229,9 +239,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: TextFormField(
                 controller: _confirmPasswordController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'CONFIRM PASSWORD'),
-                validator: (v) =>
-                    v != _passwordController.text ? 'Passwords match fail' : null,
+                decoration: const InputDecoration(
+                  labelText: 'CONFIRM PASSWORD',
+                ),
+                validator: (v) => v != _passwordController.text
+                    ? 'Passwords do not match'
+                    : null,
               ),
             ),
           ],
@@ -332,9 +345,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Expanded(
               child: TextFormField(
                 controller: _projectTypeController,
-                decoration: const InputDecoration(
-                  labelText: 'PROJECT TYPE',
-                ),
+                decoration: const InputDecoration(labelText: 'PROJECT TYPE'),
               ),
             ),
             const SizedBox(width: 16),
@@ -379,145 +390,149 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.all(24),
           child: Center(
             child: Column(
-            children: [
-              Text(
-                'JOIN XR-DOCK',
-                style: Theme.of(context).textTheme.displayLarge,
-              ),
-              const SizedBox(height: 40),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    width: 750,
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.05)
-                          : Colors.white.withAlpha(200),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          Row(
-                            children: List.generate(3, (index) {
-                              return Expanded(
-                                child: Container(
-                                  height: 4,
-                                  margin: EdgeInsets.only(
-                                    right: index < 2 ? 8 : 0,
+              children: [
+                Text(
+                  'JOIN XR-DOCK',
+                  style: Theme.of(context).textTheme.displayLarge,
+                ),
+                const SizedBox(height: 40),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      width: 750,
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.white.withAlpha(200),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            Row(
+                              children: List.generate(3, (index) {
+                                return Expanded(
+                                  child: Container(
+                                    height: 4,
+                                    margin: EdgeInsets.only(
+                                      right: index < 2 ? 8 : 0,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _currentStep >= index
+                                          ? Theme.of(context).primaryColor
+                                          : Colors.grey.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: _currentStep >= index
-                                        ? Theme.of(context).primaryColor
-                                        : Colors.grey.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                          const SizedBox(height: 32),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: currentStepWidget,
-                          ),
-                          const SizedBox(height: 32),
-                          _isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        if (_currentStep > 0)
+                                );
+                              }),
+                            ),
+                            const SizedBox(height: 32),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: currentStepWidget,
+                            ),
+                            const SizedBox(height: 32),
+                            _isLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (_currentStep > 0)
+                                            Expanded(
+                                              child: OutlinedButton(
+                                                onPressed: _previousStep,
+                                                child: const Text('BACK'),
+                                              ),
+                                            ),
+                                          if (_currentStep > 0)
+                                            const SizedBox(width: 16),
                                           Expanded(
-                                            child: OutlinedButton(
-                                              onPressed: _previousStep,
-                                              child: const Text('BACK'),
+                                            child: ElevatedButton(
+                                              onPressed: _nextStep,
+                                              child: Text(
+                                                _currentStep < 2
+                                                    ? 'NEXT'
+                                                    : 'CREATE ACCOUNT',
+                                              ),
                                             ),
                                           ),
-                                        if (_currentStep > 0)
-                                          const SizedBox(width: 16),
-                                        Expanded(
-                                          child: ElevatedButton(
-                                            onPressed: _nextStep,
-                                            child: Text(
-                                              _currentStep < 2
-                                                  ? 'NEXT'
-                                                  : 'CREATE ACCOUNT',
+                                        ],
+                                      ),
+                                      if (_currentStep == 0) ...[
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          children: [
+                                            const Expanded(child: Divider()),
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                  ),
+                                              child: Text(
+                                                'OR',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade500,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                            const Expanded(child: Divider()),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: OutlinedButton.icon(
+                                            onPressed: _signUpWithGoogle,
+                                            icon: Image.network(
+                                              'https://www.google.com/favicon.ico',
+                                              height: 18,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const Icon(
+                                                    Icons.login,
+                                                    size: 18,
+                                                  ),
+                                            ),
+                                            label: const Text(
+                                              'CONTINUE WITH GOOGLE',
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 14,
+                                                  ),
+                                              side: BorderSide(
+                                                color: Colors.grey.shade300,
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ],
-                                    ),
-                                    if (_currentStep == 0) ...[
-                                      const SizedBox(height: 16),
-                                      Row(
-                                        children: [
-                                          const Expanded(child: Divider()),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                            ),
-                                            child: Text(
-                                              'OR',
-                                              style: TextStyle(
-                                                color: Colors.grey.shade500,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                          const Expanded(child: Divider()),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: OutlinedButton.icon(
-                                          onPressed: _signUpWithGoogle,
-                                          icon: Image.network(
-                                            'https://www.google.com/favicon.ico',
-                                            height: 18,
-                                            errorBuilder: (_, __, ___) =>
-                                                const Icon(
-                                                  Icons.login,
-                                                  size: 18,
-                                                ),
-                                          ),
-                                          label: const Text(
-                                            'CONTINUE WITH GOOGLE',
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 14,
-                                            ),
-                                            side: BorderSide(
-                                              color: Colors.grey.shade300,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
                                     ],
-                                  ],
-                                ),
-                          const SizedBox(height: 16),
-                          if (_currentStep == 0)
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('BACK TO LOGIN'),
-                            ),
-                        ],
+                                  ),
+                            const SizedBox(height: 16),
+                            if (_currentStep == 0)
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('BACK TO LOGIN'),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ),

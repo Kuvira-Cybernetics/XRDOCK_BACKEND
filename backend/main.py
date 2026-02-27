@@ -233,36 +233,78 @@ async def import_autodesk_file(
     name = import_data.get("name")
     
     try:
+        # Check if project already imported based on its predicted filename name
+        # In a robust system, you'd save the URN in the database. Here we check by name and owner to prevent duplicate downloads.
+        predicted_name = f"{name.replace('.glb', '')}" if name.lower().endswith('.glb') else f"[Importing] {name}"
+        existing_project_query = select(Project).where(Project.owner_uid == uid, Project.name == predicted_name)
+        existing_project_result = await session.execute(existing_project_query)
+        if existing_project_result.scalar_one_or_none():
+            return {
+                "status": "success",
+                "translation_status": "already_imported"
+            }
+
         # 1. Get the URN for the item (latest version)
-        # Note: In a production app, you'd fetch the latest version's URN.
-        # For simplicity, we assume the item_id can be used as a base for the URN if it's already a versioned URN
-        # or we fetch it. Let's assume the frontend might need to pass the version URN.
-        # But we can also fetch it here.
-        urn = item_id # Placeholder: ideally fetch version URN
+        import urllib.parse
+        version_urn = await aps.get_item_tip_version(user.autodesk_access_token, aps_project_id, item_id)
         
-        # 2. Trigger translation
-        translation_result = await aps.translate_to_glb(user.autodesk_access_token, urn)
-        
-        # 3. Create a project in our DB
-        db_project = Project(
-            name=f"[Importing] {name}",
-            owner_uid=user_data.get("uid"),
-            model_filename="bugatti.glb", # Temporary placeholder until translation done
-        )
-        session.add(db_project)
-        await session.commit()
-        await session.refresh(db_project)
-        
-        # 4. In a real app, you'd set up a webhook or background task to poll status
-        # and update the project once the GLB is ready for download.
-        
-        return {
-            "status": "success",
-            "project_id": db_project.id,
-            "translation_status": translation_result.get("result", "success")
-        }
+        if name.lower().endswith('.glb'):
+            # It is a .glb file, download it directly from Autodesk OSS
+            download_url = await aps.get_version_download_url(user.autodesk_access_token, aps_project_id, version_urn)
+            
+            # Create a DB project first to get an ID
+            db_project = Project(
+                name=f"{name.replace('.glb', '')}",
+                owner_uid=user_data.get("uid"),
+                model_filename="temp.glb",
+            )
+            session.add(db_project)
+            await session.commit()
+            await session.refresh(db_project)
+            
+            # Download the file
+            import httpx
+            filename = f"model_{db_project.id}_{name}"
+            file_path = os.path.join("static", "models", filename)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(download_url)
+                resp.raise_for_status()
+                with open(file_path, "wb") as f:
+                    f.write(resp.content)
+            
+            db_project.model_filename = filename
+            await session.commit()
+            
+            return {
+                "status": "success",
+                "project_id": db_project.id,
+                "translation_status": "ready"
+            }
+        else:
+            # 2. Trigger translation for non-glb files
+            translation_result = await aps.translate_to_glb(user.autodesk_access_token, version_urn)
+            
+            # 3. Create a project in our DB
+            db_project = Project(
+                name=f"[Importing] {name}",
+                owner_uid=user_data.get("uid"),
+                model_filename="bugatti.glb", # Temporary placeholder until translation done
+            )
+            session.add(db_project)
+            await session.commit()
+            await session.refresh(db_project)
+            
+            return {
+                "status": "success",
+                "project_id": db_project.id,
+                "translation_status": translation_result.get("result", "success")
+            }
     except Exception as e:
         print(f"Import error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/projects", response_model=List[Project])

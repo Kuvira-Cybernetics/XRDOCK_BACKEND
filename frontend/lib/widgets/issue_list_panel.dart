@@ -82,6 +82,9 @@ class _IssueListPanelState extends State<IssueListPanel> {
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode == 200) {
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Issue deleted');
+        }
         _fetchIssues();
       }
     } catch (e) {
@@ -101,6 +104,9 @@ class _IssueListPanelState extends State<IssueListPanel> {
         body: jsonEncode(data),
       );
       if (response.statusCode == 200) {
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Issue updated');
+        }
         _fetchIssues();
       }
     } catch (e) {
@@ -120,6 +126,9 @@ class _IssueListPanelState extends State<IssueListPanel> {
         body: jsonEncode(data),
       );
       if (response.statusCode == 200) {
+        if (mounted) {
+          CommonData.showCustomSnackBar(context, 'Issue created');
+        }
         _fetchIssues();
       }
     } catch (e) {
@@ -254,10 +263,10 @@ class _IssueListPanelState extends State<IssueListPanel> {
                       });
                       Navigator.pop(ctx);
                     } else if (selectedProjectForIssue == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please select a project to proceed.'),
-                        ),
+                      CommonData.showCustomSnackBar(
+                        context,
+                        'Please select a project to proceed.',
+                        isError: true,
                       );
                     }
                   },
@@ -306,7 +315,7 @@ class _IssueListPanelState extends State<IssueListPanel> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'PROJECT ISSUES', 
+                  'PROJECT ISSUES',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     letterSpacing: 2,

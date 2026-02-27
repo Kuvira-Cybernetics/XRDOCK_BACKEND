@@ -99,6 +99,48 @@ class APSService:
             response.raise_for_status()
             return response.json().get("data", [])
 
+    async def get_item_tip_version(self, access_token: str, project_id: str, item_id: str) -> str:
+        """Returns the URN of the latest version (tip) of an item."""
+        import urllib.parse
+        safe_project_id = urllib.parse.quote(project_id)
+        safe_item_id = urllib.parse.quote(item_id, safe='')
+        url = f"{self.base_url}/data/v1/projects/{safe_project_id}/items/{safe_item_id}"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return data["data"]["relationships"]["tip"]["data"]["id"]
+
+    async def get_version_download_url(self, access_token: str, project_id: str, version_urn: str) -> str:
+        """Gets a signed S3 download URL for a file version."""
+        import urllib.parse
+        safe_project_id = urllib.parse.quote(project_id)
+        safe_version_urn = urllib.parse.quote(version_urn, safe='')
+        url = f"{self.base_url}/data/v1/projects/{safe_project_id}/versions/{safe_version_urn}"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            storage_urn = data["data"]["relationships"]["storage"]["data"]["id"]
+            
+            # storage_urn format: urn:adsk.objects:os.object:wip.eu.1/....
+            url_oss = f"{self.base_url}/oss/v2/objects/{urllib.parse.quote(storage_urn, safe='')}/signeds3download?minutesExpiration=15"
+            # It's actually easier to just use the OSS buckets endpoint if we extract bucketKey and objectKey
+            urn_parts = storage_urn.split(':')
+            if len(urn_parts) >= 4:
+                bucket_and_object = urn_parts[-1].split('/')
+                bucket_key = bucket_and_object[0]
+                object_key = '/'.join(bucket_and_object[1:])
+                
+                s3_url = f"{self.base_url}/oss/v2/buckets/{bucket_key}/objects/{urllib.parse.quote(object_key, safe='')}/signeds3download"
+                s3_response = await client.get(s3_url, headers=headers)
+                s3_response.raise_for_status()
+                return s3_response.json()["url"]
+            raise ValueError("Failed to parse storage URN")
+
     # --- Model Derivative API ---
 
     async def translate_to_glb(self, access_token: str, urn: str) -> Dict[str, Any]:
