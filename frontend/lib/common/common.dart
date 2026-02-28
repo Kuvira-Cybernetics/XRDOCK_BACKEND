@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CommonData {
   // Backend Configuration
 
-  //Dev
-  // static const String backendUrl =
-  //     'http://localhost:8001'; // Change for production
-
-  //Prod
-  static const String backendUrl = 'https://api.xrdock.in';
+  static String get backendUrl =>
+      dotenv.env['BACKEND_URL'] ?? 'http://localhost:8001';
 
   // GOOGLE SIGN-IN CLIENT ID
   static const String googleClientId =
@@ -21,6 +19,10 @@ class CommonData {
   static bool isAutodeskUser =
       false; // Whether the user has a linked Autodesk account
   static String? pendingAutodeskToken; // For deep-link capture
+  static String? localSyncPath;
+  static String? bimUploadHubId;
+  static String? bimUploadProjectId;
+  static String? bimUploadFolderId;
 
   static bool showAllIssuesInDashboard = false;
 
@@ -32,33 +34,63 @@ class CommonData {
   ); // 20% white for glass
   static const Color panelBackground = Color(0xFF1E1E1E);
 
+  static bool isIntentionalLogout = false;
+
   static void showCustomSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
+    bool isInfo = false,
   }) {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    Color bgColor = Colors.green;
+    IconData icon = Icons.check_circle_outline;
+
+    if (isError) {
+      bgColor = Colors.red;
+      icon = Icons.error_outline;
+    } else if (isInfo) {
+      bgColor = Colors.blueAccent;
+      icon = Icons.info_outline;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isError ? Icons.error_outline : Icons.check_circle_outline,
-              color: Colors.white,
-            ),
+            Icon(icon, color: Colors.white),
             const SizedBox(width: 8),
             Flexible(
               child: Text(message, style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 2),
+        backgroundColor: bgColor,
+        duration: const Duration(seconds: 4),
         behavior: SnackBarBehavior.floating,
         width: 400,
       ),
     );
+  }
+
+  static Future<void> logout(
+    BuildContext context, {
+    bool sessionExpired = false,
+  }) async {
+    isIntentionalLogout = !sessionExpired;
+    if (sessionExpired && context.mounted) {
+      showCustomSnackBar(
+        context,
+        'Session expired. Please log in again.',
+        isInfo: true,
+      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+    await FirebaseAuth.instance.signOut();
+    if (!sessionExpired && context.mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
   }
 }

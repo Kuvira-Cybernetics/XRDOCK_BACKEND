@@ -20,7 +20,8 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  static bool _isCollapsed = false; // Static to preserve state across route changes
+  static bool _isCollapsed =
+      false; // Static to preserve state across route changes
 
   void _logout({bool force = false}) async {
     if (!force) {
@@ -53,7 +54,7 @@ class _MainLayoutState extends State<MainLayout> {
     }
 
     await FirebaseAuth.instance.signOut();
-    
+
     // Clear global state
     CommonData.currentUserId = null;
     CommonData.currentUserEmail = null;
@@ -93,18 +94,25 @@ class _MainLayoutState extends State<MainLayout> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 32,
+                    horizontal: 16,
+                  ),
                   child: _isCollapsed
                       ? GestureDetector(
                           onTap: () => setState(() => _isCollapsed = false),
-                          child: Icon(Icons.menu_open, color: Theme.of(context).primaryColor),
+                          child: Icon(
+                            Icons.menu_open,
+                            color: Theme.of(context).primaryColor,
+                          ),
                         )
                       : Row(
                           children: [
                             Expanded(
                               child: Text(
                                 'XR-DOCK',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 3,
                                     ),
@@ -112,7 +120,8 @@ class _MainLayoutState extends State<MainLayout> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.chevron_left, size: 20),
-                              onPressed: () => setState(() => _isCollapsed = true),
+                              onPressed: () =>
+                                  setState(() => _isCollapsed = true),
                             ),
                           ],
                         ),
@@ -123,20 +132,28 @@ class _MainLayoutState extends State<MainLayout> {
                   icon: Icons.folder_special_outlined,
                   label: 'PROJECTS',
                   isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/dashboard' && !CommonData.showAllIssuesInDashboard,
+                  isSelected:
+                      currentRoute == '/dashboard' &&
+                      !CommonData.showAllIssuesInDashboard,
                   onTap: () {
                     setState(() => CommonData.showAllIssuesInDashboard = false);
-                    Navigator.pushReplacementNamed(context, '/dashboard');
+                    if (currentRoute != '/dashboard') {
+                      Navigator.pushReplacementNamed(context, '/dashboard');
+                    }
                   },
                 ),
                 SidebarItem(
                   icon: Icons.list_alt_rounded,
                   label: 'ISSUES',
                   isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/dashboard' && CommonData.showAllIssuesInDashboard,
+                  isSelected:
+                      currentRoute == '/dashboard' &&
+                      CommonData.showAllIssuesInDashboard,
                   onTap: () {
                     setState(() => CommonData.showAllIssuesInDashboard = true);
-                    Navigator.pushReplacementNamed(context, '/dashboard');
+                    if (currentRoute != '/dashboard') {
+                      Navigator.pushReplacementNamed(context, '/dashboard');
+                    }
                   },
                 ),
                 SidebarItem(
@@ -148,9 +165,20 @@ class _MainLayoutState extends State<MainLayout> {
                     Navigator.pushReplacementNamed(context, '/profile');
                   },
                 ),
+                SidebarItem(
+                  icon: Icons.settings_outlined,
+                  label: 'SETTINGS',
+                  isCollapsed: _isCollapsed,
+                  isSelected: currentRoute == '/settings',
+                  onTap: () {
+                    Navigator.pushReplacementNamed(context, '/settings');
+                  },
+                ),
                 const Spacer(),
                 SidebarItem(
-                  icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  icon: isDark
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
                   label: isDark ? 'LIGHT MODE' : 'DARK MODE',
                   isCollapsed: _isCollapsed,
                   isSelected: false,
@@ -170,9 +198,7 @@ class _MainLayoutState extends State<MainLayout> {
             ),
           ),
           // Main Content Area (Child)
-          Expanded(
-            child: widget.child,
-          ),
+          Expanded(child: widget.child),
         ],
       ),
     );
@@ -201,23 +227,35 @@ class SidebarItem extends StatelessWidget {
     Color primaryColor = Theme.of(context).primaryColor;
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 4 : 12, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCollapsed ? 4 : 12,
+        vertical: 4,
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 16, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: isCollapsed ? 0 : 16,
+            vertical: 14,
+          ),
           decoration: BoxDecoration(
-            color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent,
+            color: isSelected
+                ? primaryColor.withOpacity(0.1)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
-            mainAxisAlignment: isCollapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+            mainAxisAlignment: isCollapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? primaryColor : (isDark ? Colors.white70 : Colors.black54),
+                color: isSelected
+                    ? primaryColor
+                    : (isDark ? Colors.white70 : Colors.black54),
               ),
               if (!isCollapsed) ...[
                 const SizedBox(width: 16),
@@ -226,8 +264,12 @@ class SidebarItem extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? primaryColor : (isDark ? Colors.white70 : Colors.black54),
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: isSelected
+                          ? primaryColor
+                          : (isDark ? Colors.white70 : Colors.black54),
                       letterSpacing: 1.2,
                     ),
                     overflow: TextOverflow.ellipsis,

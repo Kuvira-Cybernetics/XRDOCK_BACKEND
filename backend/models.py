@@ -26,6 +26,15 @@ class User(SQLModel, table=True):
     project_type: Optional[str] = None
     expected_seats: Optional[int] = None
     
+    # --- Settings ---
+    local_sync_path: Optional[str] = None
+    bim_upload_hub_id: Optional[str] = None
+    bim_upload_hub_name: Optional[str] = None
+    bim_upload_project_id: Optional[str] = None
+    bim_upload_project_name: Optional[str] = None
+    bim_upload_folder_id: Optional[str] = None
+    bim_upload_folder_name: Optional[str] = None
+    
     # --- Billing / Subscription ---
     subscription_plan: Optional[str] = Field(default=None) # basic, pro, enterprise
     subscription_expiry: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
@@ -52,9 +61,42 @@ class UserUpdate(SQLModel):
     country: Optional[str] = None
     project_type: Optional[str] = None
     expected_seats: Optional[int] = None
+    local_sync_path: Optional[str] = None
+    bim_upload_hub_id: Optional[str] = None
+    bim_upload_hub_name: Optional[str] = None
+    bim_upload_project_id: Optional[str] = None
+    bim_upload_project_name: Optional[str] = None
+    bim_upload_folder_id: Optional[str] = None
+    bim_upload_folder_name: Optional[str] = None
 
 class ProjectCreate(SQLModel):
     name: str
+
+class ProjectUpdate(SQLModel):
+    name: Optional[str] = None
+    loaded_model_offset_position: Optional[str] = None
+    loaded_model_offset_rotation: Optional[str] = None
+    loaded_model_offset_scale: Optional[str] = None
+    vrmenu_model_position: Optional[str] = None
+    vrmenu_model_scale: Optional[str] = None
+    created_model_center: Optional[str] = None
+    show_selection_set_index: Optional[str] = None
+    list_of_teleport_locations: Optional[str] = None
+    list_of_ar_location_file_path: Optional[str] = None
+    list_of_custom_model_data: Optional[str] = None
+    list_of_custom_model_xrpath: Optional[str] = None
+    arcount_stamp: Optional[str] = None
+    list_of_rules: Optional[str] = None
+    list_of_marker_issue: Optional[str] = None
+    list_of_marker_lable: Optional[str] = None
+    last_teleported_location: Optional[str] = None
+    project_geometry_path: Optional[str] = None
+    project_material_path: Optional[str] = None
+    project_udata_path: Optional[str] = None
+    teleport_last_index: Optional[int] = None
+    ruler_last_index: Optional[int] = None
+    marker_issue_last_index: Optional[int] = None
+    marker_lable_last_index: Optional[int] = None
 
 class IssueUpdate(SQLModel):
     title: Optional[str] = None
@@ -66,7 +108,33 @@ class Project(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     owner_uid: Optional[str] = Field(default=None, index=True) # Links to User.uid
-    model_filename: str = Field(default="bugatti.glb")
+    model_filename: Optional[str] = Field(default=None)
+
+    # --- Unity Metadata ---
+    loaded_model_offset_position: Optional[str] = None
+    loaded_model_offset_rotation: Optional[str] = None
+    loaded_model_offset_scale: Optional[str] = None
+    vrmenu_model_position: Optional[str] = None
+    vrmenu_model_scale: Optional[str] = None
+    created_model_center: Optional[str] = None
+    show_selection_set_index: Optional[str] = None
+    list_of_teleport_locations: Optional[str] = None
+    list_of_ar_location_file_path: Optional[str] = None
+    list_of_custom_model_data: Optional[str] = None
+    list_of_custom_model_xrpath: Optional[str] = None
+    arcount_stamp: Optional[str] = None
+    list_of_rules: Optional[str] = None
+    list_of_marker_issue: Optional[str] = None
+    list_of_marker_lable: Optional[str] = None
+    last_teleported_location: Optional[str] = None
+    project_geometry_path: Optional[str] = None
+    project_material_path: Optional[str] = None
+    project_udata_path: Optional[str] = None
+    teleport_last_index: Optional[int] = None
+    ruler_last_index: Optional[int] = None
+    marker_issue_last_index: Optional[int] = None
+    marker_lable_last_index: Optional[int] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime(timezone=True)))
 
 class Issue(SQLModel, table=True):

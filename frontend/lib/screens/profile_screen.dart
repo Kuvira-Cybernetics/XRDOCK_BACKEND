@@ -170,8 +170,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirm != true) return;
 
-    await FirebaseAuth.instance.signOut();
-    if (mounted) Navigator.pushReplacementNamed(context, '/');
+    await CommonData.logout(context);
+    // Routing handled seamlessly via AuthWrapper stream emit.
   }
 
   String _formatExpiry(String? expiryStr) {
