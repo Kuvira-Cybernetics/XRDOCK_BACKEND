@@ -167,16 +167,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'XR-DOCK',
-                  style: Theme.of(context).textTheme.displayLarge,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'ADVANCED SPATIAL ANALYTICS',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(letterSpacing: 4),
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 100,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 50),
                 ClipRRect(
@@ -316,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextButton(
                               onPressed: () =>
                                   Navigator.pushNamed(context, '/subscribe'),
-                              child: const Text('VIEW SUBSCRIPTION PLANS'),
+                              child: const Text('CONTACT SALES / PRICING'),
                             ),
                           ],
                         ),

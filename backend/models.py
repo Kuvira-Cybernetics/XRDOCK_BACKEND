@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, ForeignKey, Integer
 
@@ -71,6 +71,11 @@ class UserUpdate(SQLModel):
 
 class ProjectCreate(SQLModel):
     name: str
+
+class FolderStructureRequest(SQLModel):
+    project_id: str
+    base_folder_id: str
+    paths: List[str]
 
 class ProjectUpdate(SQLModel):
     name: Optional[str] = None
@@ -156,4 +161,10 @@ class PKCEState(SQLModel, table=True):
     state: str = Field(index=True, unique=True)
     code_verifier: str
     linking_uid: Optional[str] = None # Firebase UID if linking
+    redirect_uri: Optional[str] = None # Where to go after callback
+    custom_token: Optional[str] = None # Token for Unity polling
     expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True)))
+class ContactRequest(SQLModel):
+    name: str
+    email: str
+    message: str

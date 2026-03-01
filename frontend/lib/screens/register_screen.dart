@@ -100,7 +100,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
 
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/subscribe');
+          Navigator.pushReplacementNamed(context, '/dashboard');
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -391,9 +391,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Center(
             child: Column(
               children: [
-                Text(
-                  'JOIN XR-DOCK',
-                  style: Theme.of(context).textTheme.displayLarge,
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 80,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 40),
                 ClipRRect(

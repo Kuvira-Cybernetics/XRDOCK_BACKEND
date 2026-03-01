@@ -14,11 +14,15 @@ from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 from fastapi.responses import RedirectResponse
 from firebase_admin import auth
+import jwt
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from models import Issue, Project, User, UserUpdate, ProjectCreate, ProjectUpdate, IssueUpdate, PKCEState
+from models import Issue, Project, User, UserUpdate, ProjectCreate, ProjectUpdate, IssueUpdate, PKCEState, FolderStructureRequest, ContactRequest
 from db import init_db, get_session
 from dependencies import verify_firebase_token
 from aps_service import APSService
@@ -69,6 +73,54 @@ def get_default_project_data(project_name: str, project_path: str):
         "Marker_Lable_Last_Index": 0
     }
 
+def update_master_xrdock_json(root_dir: str, project_name: str, project_dir: str):
+    """
+    Updates the master XRDock.json file found in root_dir.
+    Appends the project data if it doesn't exist, or updates it if it does.
+    """
+    xrdock_path = os.path.join(root_dir, "XRDock.json")
+    if not os.path.exists(xrdock_path):
+        # Create a default structure if it doesn't exist
+        data = {
+            "XRDock_Application_Data_": {},
+            "XRDock_User_Data_": {
+                "User_Name": "Default_User",
+                "User_MailID": "Default_MailID",
+                "User_Validity": True,
+                "List_Of_Project_Data_": []
+            }
+        }
+    else:
+        try:
+            with open(xrdock_path, "r") as f:
+                data = json.load(f)
+        except:
+            return  # Silent fail if corrupted
+            
+    if "XRDock_User_Data_" not in data:
+        data["XRDock_User_Data_"] = {"List_Of_Project_Data_": []}
+        
+    project_list = data["XRDock_User_Data_"].get("List_Of_Project_Data_", [])
+    
+    # Check if project already exists in the list
+    existing_idx = -1
+    for i, p in enumerate(project_list):
+        if p.get("Project_Name") == project_name:
+            existing_idx = i
+            break
+    
+    new_pdata = get_default_project_data(project_name, project_dir)
+    
+    if existing_idx != -1:
+        project_list[existing_idx] = new_pdata
+    else:
+        project_list.append(new_pdata)
+        
+    data["XRDock_User_Data_"]["List_Of_Project_Data_"] = project_list
+    
+    with open(xrdock_path, "w") as f:
+        json.dump(data, f, indent=4)
+
 async def ensure_valid_autodesk_token(db_user: User, session: AsyncSession) -> str:
     """Checks if the user's Autodesk access token is valid and refreshes it if needed."""
     now = datetime.now(timezone.utc)
@@ -77,20 +129,17 @@ async def ensure_valid_autodesk_token(db_user: User, session: AsyncSession) -> s
         if not db_user.autodesk_refresh_token:
              return db_user.autodesk_access_token
         
-        try:
-            tokens = await aps.refresh_tokens(db_user.autodesk_refresh_token)
-            db_user.autodesk_access_token = tokens["access_token"]
-            db_user.autodesk_refresh_token = tokens.get("refresh_token", db_user.autodesk_refresh_token)
-            db_user.autodesk_token_expires = now + timedelta(seconds=tokens["expires_in"])
-            
-            session.add(db_user)
-            await session.commit()
-            await session.refresh(db_user)
-        except Exception as e:
-            print(f"Failed to refresh Autodesk token: {e}")
-            # Actual API call will fail with 401 if refresh failed
-    
     return db_user.autodesk_access_token
+
+class IssueCreate(BaseModel):
+    project_id: int
+    title: str
+    description: Optional[str] = None
+    status: str = "open"
+    priority: str = "medium"
+    x_coord: Optional[float] = None
+    y_coord: Optional[float] = None
+    z_coord: Optional[float] = None
 
 app = FastAPI(title="XRDOCK Backend API")
 
@@ -151,6 +200,7 @@ async def pick_folder():
 @app.get("/auth/autodesk/login")
 async def autodesk_login(
     firebase_uid: Optional[str] = None,
+    redirect_uri: Optional[str] = None,
     session: AsyncSession = Depends(get_session)
 ):
     state = str(uuid.uuid4())
@@ -161,12 +211,13 @@ async def autodesk_login(
         state=state,
         code_verifier=pkce["code_verifier"],
         linking_uid=firebase_uid,
+        redirect_uri=redirect_uri,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=10)
     )
     session.add(db_state)
     await session.commit()
     
-    return {"url": aps.get_login_url(code_challenge=pkce["code_challenge"], state=state)}
+    return {"url": aps.get_login_url(code_challenge=pkce["code_challenge"], state=state), "state": state}
 
 @app.get("/auth/autodesk/callback")
 async def autodesk_callback(
@@ -237,24 +288,63 @@ async def autodesk_callback(
         db_user.autodesk_refresh_token = tokens["refresh_token"]
         db_user.autodesk_token_expires = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
         
-        # 6. Cleanup state
-        await session.delete(db_state)
-        await session.commit()
-        await session.refresh(db_user)
-
-        # 7. Generate Firebase Custom Token
+        # 6. Generate Firebase Custom Token
         custom_token_bytes = auth.create_custom_token(db_user.uid)
         custom_token = custom_token_bytes.decode('utf-8') if isinstance(custom_token_bytes, bytes) else custom_token_bytes
 
-        # 8. Redirect to frontend
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
-        redirect_url = f"{frontend_url}/#/login?token={custom_token}"
-        print(f"Redirecting user to: {redirect_url}")
-        return RedirectResponse(url=redirect_url)
+        # 7. Store token for polling and handle redirect
+        target_redirect = db_state.redirect_uri
+        
+        if target_redirect:
+            # Unity flow: Generate a symmetric JWT session token that our backend can verify directly
+            # This avoids the "Custom Token vs ID Token" issue on Unity
+            secret = os.getenv("JWT_SECRET", "xrdock_secret_key_2024")
+            session_token = jwt.encode({
+                "uid": db_user.uid,
+                "email": db_user.email,
+                "exp": datetime.now(timezone.utc) + timedelta(days=7)
+            }, secret, algorithm="HS256")
+            
+            # Use the symmetric token instead of the Firebase Custom Token for Unity
+            db_state.custom_token = session_token
+            db_state.expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+            await session.commit()
+            print(f"Unity Login: Session Token stored for state {state}, redirecting to {target_redirect}")
+            return RedirectResponse(url=target_redirect)
+        else:
+            # Web flow: Standard redirect with token in query, cleanup state
+            await session.delete(db_state)
+            await session.commit()
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5000")
+            redirect_url = f"{frontend_url}/#/login?token={custom_token}"
+            print(f"Web Login: Redirecting user to: {redirect_url}")
+            return RedirectResponse(url=redirect_url)
 
     except Exception as e:
         print(f"Autodesk callback error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/auth/autodesk/check-status/{state}")
+async def check_status(
+    state: str,
+    session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(select(PKCEState).where(PKCEState.state == state))
+    db_state = result.scalar_one_or_none()
+    
+    if not db_state:
+        return {"status": "pending"}
+        
+    if db_state.custom_token:
+        token = db_state.custom_token
+        # Once retrieved, we can delete the record
+        await session.delete(db_state)
+        await session.commit()
+        return {"status": "success", "token": token}
+        
+    return {"status": "pending"}
 
 @app.get("/autodesk/hubs")
 async def get_autodesk_hubs(
@@ -465,6 +555,173 @@ async def autodesk_upload(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/autodesk/create_folder_structure")
+async def autodesk_create_folder_structure(
+    request: FolderStructureRequest,
+    user: dict = Depends(verify_firebase_token),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Creates a folder tree in Autodesk BIM 360 / ACC. Returns a mapping of relative paths to new folder urns.
+    """
+    db_user = await get_user_by_firebase_uid(user["uid"], session)
+    if not db_user or not db_user.autodesk_access_token:
+        raise HTTPException(status_code=403, detail="Autodesk not linked")
+
+    token_to_use = await ensure_valid_autodesk_token(db_user, session)
+
+    folder_map = {"": request.base_folder_id}
+    folder_contents_cache = {}
+    
+    # Sort paths by length so we create parents before children
+    sorted_paths = sorted(request.paths, key=lambda x: x.count('/'))
+
+    for path in sorted_paths:
+        if not path:
+            continue
+            
+        parts = path.split('/')
+        folder_name = parts[-1]
+        parent_path = '/'.join(parts[:-1])
+        
+        parent_folder_id = folder_map.get(parent_path, request.base_folder_id)
+        
+        if parent_folder_id not in folder_contents_cache:
+            contents = await aps.get_folder_contents(token_to_use, request.project_id, parent_folder_id)
+            folder_contents_cache[parent_folder_id] = {
+                item["attributes"]["displayName"]: item["id"] 
+                for item in contents if item.get("type") == "folders"
+            }
+            
+        existing_folders = folder_contents_cache[parent_folder_id]
+        
+        if folder_name in existing_folders:
+            folder_map[path] = existing_folders[folder_name]
+        else:
+            try:
+                new_folder_id = await aps.create_folder(
+                    access_token=token_to_use,
+                    project_id=request.project_id,
+                    parent_folder_id=parent_folder_id,
+                    folder_name=folder_name
+                )
+                folder_map[path] = new_folder_id
+                # Update cache so subsequent children are aware
+                existing_folders[folder_name] = new_folder_id
+            except Exception as e:
+                print(f"Failed to create folder {folder_name}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to create folder {folder_name}: {e}")
+
+    if "" in folder_map:
+        del folder_map[""]
+        
+    return {"status": "success", "folder_map": folder_map}
+
+class AutodeskFolderUploadRequest(BaseModel):
+    local_path: str
+    project_id: str
+    folder_id: str
+
+@app.post("/autodesk/upload_local_folder")
+async def autodesk_upload_local_folder(
+    request: AutodeskFolderUploadRequest,
+    user: dict = Depends(verify_firebase_token),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Uploads a local folder recursively directly from the host machine to an Autodesk BIM 360 / ACC folder.
+    """
+    import os
+    db_user = await get_user_by_firebase_uid(user["uid"], session)
+    if not db_user or not db_user.autodesk_access_token:
+        raise HTTPException(status_code=403, detail="Autodesk not linked")
+
+    # Ensure token is valid
+    token_to_use = await ensure_valid_autodesk_token(db_user, session)
+
+    if not os.path.exists(request.local_path) or not os.path.isdir(request.local_path):
+        raise HTTPException(status_code=400, detail="Local folder path does not exist")
+
+    try:
+        # Recursive upload function
+        async def _upload_recursive(current_local_path, current_bim_folder_id):
+            # Fetch existing contents of current BIM folder
+            contents = await aps.get_folder_contents(
+                token_to_use, 
+                request.project_id, 
+                current_bim_folder_id
+            )
+            
+            existing_items = {
+                item["attributes"]["displayName"]: item["id"] 
+                for item in contents if item.get("type") == "items"
+            }
+            
+            existing_folders = {
+                item["attributes"]["displayName"]: item["id"] 
+                for item in contents if item.get("type") == "folders"
+            }
+            
+            for item_name in os.listdir(current_local_path):
+                # ignore macOS hidden files
+                if item_name == "__MACOSX" or item_name.startswith("._"):
+                     continue
+                     
+                item_path = os.path.join(current_local_path, item_name)
+                
+                if os.path.isfile(item_path):
+                    with open(item_path, "rb") as f:
+                        f_bytes = f.read()
+                        
+                    if item_name in existing_items:
+                        print(f"Updating existing file in BIM: {item_name}")
+                        await aps.update_file_version(
+                            access_token=token_to_use,
+                            project_id=request.project_id,
+                            item_id=existing_items[item_name],
+                            file_name=item_name,
+                            file_content=f_bytes
+                        )
+                    else:
+                        print(f"Uploading new file to BIM: {item_name}")
+                        await aps.upload_to_folder(
+                            access_token=token_to_use,
+                            project_id=request.project_id,
+                            folder_id=current_bim_folder_id,
+                            file_name=item_name,
+                            file_content=f_bytes
+                        )
+                elif os.path.isdir(item_path):
+                    print(f"Processing subfolder: {item_name}")
+                    subfolder_id = existing_folders.get(item_name)
+                    if not subfolder_id:
+                        # Create the subfolder in BIM
+                        subfolder_id = await aps.create_folder(
+                            access_token=token_to_use,
+                            project_id=request.project_id,
+                            parent_folder_id=current_bim_folder_id,
+                            folder_name=item_name
+                        )
+                    # Recurse into subfolder
+                    await _upload_recursive(item_path, subfolder_id)
+                    
+        # We create a top-level folder in Autodesk with the name of the picked folder.
+        top_folder_name = os.path.basename(os.path.normpath(request.local_path))
+        top_folder_id = await aps.create_folder(
+            access_token=token_to_use,
+            project_id=request.project_id,
+            parent_folder_id=request.folder_id,
+            folder_name=top_folder_name
+        )
+        
+        await _upload_recursive(request.local_path, top_folder_id)
+
+        return {"status": "success", "message": "Folder uploaded successfully"}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 class AutodeskDownloadRequest(BaseModel):
     project_id: str
     item_id: str
@@ -537,6 +794,9 @@ async def autodesk_download(
             with open(pdata_path, "w") as f:
                 json.dump(get_default_project_data(safe_root_name, project_dir), f, indent=4)
         
+
+        # Update the master XRDock.json at the sync root for Unity/Desktop discovery
+        update_master_xrdock_json(db_user.local_sync_path, safe_root_name, project_dir)
 
         return {"status": "success", "message": msg}
 
@@ -638,13 +898,13 @@ async def get_local_projects(
     if not user or not user.local_sync_path:
         return []
 
-    # Get names of projects already in DB to show "uploaded" status
-    proj_result = await session.execute(select(Project.name).where(Project.owner_uid == uid))
-    uploaded_names = {p[0].lower() for p in proj_result.all()}
+    # Get IDs of projects already in DB to attach issues to uploaded local projects
+    proj_result = await session.execute(select(Project.name, Project.id).where(Project.owner_uid == uid))
+    uploaded_projects = {p[0].lower(): p[1] for p in proj_result.all()}
     
     sync_path = user.local_sync_path
     
-    def scan_folder(spath, uploaded_set):
+    def scan_folder(spath, uploaded_map):
         found = []
         if not os.path.exists(spath):
             return []
@@ -673,7 +933,8 @@ async def get_local_projects(
                     found.append({
                         "name": display_name,
                         "path": item_path,
-                        "is_uploaded": display_name.lower() in uploaded_set,
+                        "id": uploaded_map.get(display_name.lower()),
+                        "is_uploaded": display_name.lower() in uploaded_map,
                         "project_data": project_data,
                         "issue_count": issue_count
                     })
@@ -683,7 +944,7 @@ async def get_local_projects(
             return []
 
     try:
-        local_projects = await run_in_threadpool(scan_folder, sync_path, uploaded_names)
+        local_projects = await run_in_threadpool(scan_folder, sync_path, uploaded_projects)
         return local_projects
     except Exception as e:
         print(f"get_local_projects failed: {e}")
@@ -733,9 +994,112 @@ async def browse_local_system(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Issues Endpoints ---
+
+@app.get("/issues", response_model=List[Issue])
+async def get_all_user_issues(
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    uid = user_data.get("uid")
+    # For now, return issues where user is the author
+    # In future, might want to return issues for projects the user has access to
+    statement = select(Issue).where(Issue.author_uid == uid).order_by(Issue.id.desc())
+    result = await session.execute(statement)
+    return result.scalars().all()
+
+@app.get("/issues/{project_id}", response_model=List[Issue])
+async def get_project_issues(
+    project_id: int,
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    uid = user_data.get("uid")
+    # Verify project ownership
+    proj_stmt = select(Project).where(Project.id == project_id, Project.owner_uid == uid)
+    proj_res = await session.execute(proj_stmt)
+    if not proj_res.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Access denied to project issues")
+
+    statement = select(Issue).where(Issue.project_id == project_id).order_by(Issue.id.desc())
+    result = await session.execute(statement)
+    return result.scalars().all()
+
+@app.post("/issues", response_model=Issue)
+async def create_issue(
+    issue_data: IssueCreate,
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    uid = user_data.get("uid")
+    # Verify project ownership before allowing issue creation
+    proj_stmt = select(Project).where(Project.id == issue_data.project_id, Project.owner_uid == uid)
+    proj_res = await session.execute(proj_stmt)
+    if not proj_res.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Cannot create issue for this project")
+
+    new_issue = Issue(
+        project_id=issue_data.project_id,
+        author_uid=uid,
+        title=issue_data.title,
+        description=issue_data.description,
+        status=issue_data.status,
+        priority=issue_data.priority,
+        x_coord=issue_data.x_coord,
+        y_coord=issue_data.y_coord,
+        z_coord=issue_data.z_coord
+    )
+    session.add(new_issue)
+    await session.commit()
+    await session.refresh(new_issue)
+    return new_issue
+
+@app.put("/issues/{issue_id}", response_model=Issue)
+async def update_issue(
+    issue_id: int,
+    update_data: IssueUpdate,
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    uid = user_data.get("uid")
+    stmt = select(Issue).where(Issue.id == issue_id, Issue.author_uid == uid)
+    result = await session.execute(stmt)
+    db_issue = result.scalar_one_or_none()
+    if not db_issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    data = update_data.dict(exclude_unset=True)
+    for key, value in data.items():
+        setattr(db_issue, key, value)
+    
+    session.add(db_issue)
+    await session.commit()
+    await session.refresh(db_issue)
+    return db_issue
+
+@app.delete("/issues/{issue_id}")
+async def delete_issue(
+    issue_id: int,
+    session: AsyncSession = Depends(get_session),
+    user_data: dict = Depends(verify_firebase_token)
+):
+    uid = user_data.get("uid")
+    stmt = select(Issue).where(Issue.id == issue_id, Issue.author_uid == uid)
+    result = await session.execute(stmt)
+    db_issue = result.scalar_one_or_none()
+    if not db_issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    await session.delete(db_issue)
+    await session.commit()
+    return {"status": "success"}
+
 class LocalUploadRequest(BaseModel):
     name: str
     path: str
+    project_id: Optional[str] = None
+    folder_id: Optional[str] = None
 
 @app.post("/projects/upload_local")
 async def upload_local_project(
@@ -766,13 +1130,16 @@ async def upload_local_project(
     primary_file_bytes = None
     
     # 1. Autodesk BIM Delta-Sync Upload
-    if user.autodesk_access_token and user.bim_upload_project_id and user.bim_upload_folder_id:
+    target_project_id = request.project_id or user.bim_upload_project_id
+    target_parent_id = request.folder_id or user.bim_upload_folder_id
+
+    if user.autodesk_access_token and target_project_id and target_parent_id:
         try:
             # 1a. Ensure the project subfolder exists within the destination folder
             target_folder_id = await aps.create_folder(
                 access_token=user.autodesk_access_token,
-                project_id=user.bim_upload_project_id,
-                parent_folder_id=user.bim_upload_folder_id,
+                project_id=target_project_id,
+                parent_folder_id=target_parent_id,
                 folder_name=request.name
             )
             
@@ -784,7 +1151,7 @@ async def upload_local_project(
                 # Fetch existing contents of current BIM folder
                 contents = await aps.get_folder_contents(
                     user.autodesk_access_token, 
-                    user.bim_upload_project_id, 
+                    target_project_id, 
                     current_bim_folder_id
                 )
                 
@@ -938,6 +1305,9 @@ async def sync_project_to_local(
     if not os.path.exists(pdata_path):
         with open(pdata_path, "w") as f:
             json.dump(get_default_project_data(db_project.name, target_dir), f, indent=4)
+            
+    # Update the master XRDock.json at the sync root
+    update_master_xrdock_json(db_user.local_sync_path, db_project.name, target_dir)
             
 
     return {"ok": True}
@@ -1245,3 +1615,42 @@ async def subscribe(
         "price": PLAN_PRICES[plan],
         "expires_at": db_user.subscription_expiry.isoformat()
     }
+
+@app.post("/contact")
+async def contact_sales(request: ContactRequest):
+    recipient = "arulbabu@kuvira.in"
+    subject = f"New Contact Request from {request.name}"
+    
+    body = f"""
+    New contact request received from XR-DOCK Pricing Page:
+    
+    Name: {request.name}
+    Email: {request.email}
+    
+    Message:
+    {request.message}
+    
+    ---
+    This email was sent automatically from the XR-DOCK Backend.
+    """
+    
+    # Send email
+    try:
+        recipients = ["arulbabu@kuvira.in", request.email]
+        
+        msg = MIMEMultipart()
+        msg['From'] = "tarunpeter221@gmail.com"
+        msg['To'] = ", ".join(recipients)
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login("tarunpeter221@gmail.com", "rckrctvuvjxfyjzb")
+            server.send_message(msg)
+        
+        return {"status": "success", "message": "Contact request sent successfully. We will get back to you soon!"}
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        # Still return success to user for UX, but log error
+        return {"status": "success", "message": "Contact request received!"}

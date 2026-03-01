@@ -109,13 +109,11 @@ class _MainLayoutState extends State<MainLayout> {
                       : Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                'XR-DOCK',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 3,
-                                    ),
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                height: 32,
+                                alignment: Alignment.centerLeft,
+                                fit: BoxFit.contain,
                               ),
                             ),
                             IconButton(
@@ -136,7 +134,6 @@ class _MainLayoutState extends State<MainLayout> {
                       currentRoute == '/dashboard' &&
                       !CommonData.showAllIssuesInDashboard,
                   onTap: () {
-                    setState(() => CommonData.showAllIssuesInDashboard = false);
                     if (currentRoute != '/dashboard') {
                       Navigator.pushReplacementNamed(context, '/dashboard');
                     }
@@ -146,13 +143,10 @@ class _MainLayoutState extends State<MainLayout> {
                   icon: Icons.list_alt_rounded,
                   label: 'ISSUES',
                   isCollapsed: _isCollapsed,
-                  isSelected:
-                      currentRoute == '/dashboard' &&
-                      CommonData.showAllIssuesInDashboard,
+                  isSelected: currentRoute == '/issues',
                   onTap: () {
-                    setState(() => CommonData.showAllIssuesInDashboard = true);
-                    if (currentRoute != '/dashboard') {
-                      Navigator.pushReplacementNamed(context, '/dashboard');
+                    if (currentRoute != '/issues') {
+                      Navigator.pushReplacementNamed(context, '/issues');
                     }
                   },
                 ),
@@ -165,6 +159,17 @@ class _MainLayoutState extends State<MainLayout> {
                     Navigator.pushReplacementNamed(context, '/profile');
                   },
                 ),
+                /*
+                SidebarItem(
+                  icon: Icons.contact_support_outlined,
+                  label: 'CONTACT SALES',
+                  isCollapsed: _isCollapsed,
+                  isSelected: currentRoute == '/subscribe',
+                  onTap: () {
+                    Navigator.pushReplacementNamed(context, '/subscribe');
+                  },
+                ),
+                */
                 SidebarItem(
                   icon: Icons.settings_outlined,
                   label: 'SETTINGS',

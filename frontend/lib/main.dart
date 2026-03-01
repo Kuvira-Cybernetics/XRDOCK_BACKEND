@@ -79,7 +79,7 @@ class _XRDockAppState extends State<XRDockApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'XR-DOCK BIM',
+      title: 'XR-DOCK',
       debugShowCheckedModeBanner: false,
       theme: XRDockTheme.lightTheme.copyWith(
         pageTransitionsTheme: const PageTransitionsTheme(
@@ -110,20 +110,16 @@ class _XRDockAppState extends State<XRDockApp> {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/subscribe': (context) => const SubscriptionScreen(),
-        '/dashboard': (context) => MainLayout(
-          onThemeToggle: _toggleTheme,
-          child: const DashboardScreen(),
-        ),
-        '/profile': (context) => MainLayout(
-          onThemeToggle: _toggleTheme,
-          child: const ProfileScreen(),
-        ),
-        '/settings': (context) => MainLayout(
-          onThemeToggle: _toggleTheme,
-          child: const SettingsScreen(),
-        ),
+        '/dashboard': (context) =>
+            MainLayout(onThemeToggle: _toggleTheme, child: DashboardScreen()),
+        '/issues': (context) =>
+            MainLayout(onThemeToggle: _toggleTheme, child: DashboardScreen()),
+        '/profile': (context) =>
+            MainLayout(onThemeToggle: _toggleTheme, child: ProfileScreen()),
+        '/settings': (context) =>
+            MainLayout(onThemeToggle: _toggleTheme, child: SettingsScreen()),
         '/admin': (context) =>
-            MainLayout(onThemeToggle: _toggleTheme, child: const AdminScreen()),
+            MainLayout(onThemeToggle: _toggleTheme, child: AdminScreen()),
       },
       onGenerateRoute: (settings) {
         // Handle routes with query parameters like "/login?token=..."
@@ -160,7 +156,7 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.hasData && snapshot.data != null) {
           return MainLayout(
             onThemeToggle: onThemeToggle,
-            child: const DashboardScreen(),
+            child: DashboardScreen(),
           );
         }
 

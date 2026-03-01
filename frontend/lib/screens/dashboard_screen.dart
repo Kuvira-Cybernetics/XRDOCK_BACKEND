@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import '../widgets/autodesk_file_browser.dart';
+
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 
@@ -41,16 +42,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _selectedProject; // full project data for detail view
   Map<String, dynamic>? _selectedLocalProject;
   bool _isLoadingProjects = true;
-  int _detailTab = 0; // 0: 3D viewer, 1: issues
+  int _detailTab = 0; // 0: 3D viewer, 1: metadata, 2: issues
+  int _localDetailTab = 0; // 0: metadata, 1: issues
   int _galleryTab = 0; // 0: Local, 1: BIM (only if Autodesk user)
   final Set<int> _loadingCloudProjectIds = {};
   final Set<String> _uploadingLocalProjectNames = {};
-  bool _isCreatingProject = false;
-  bool _isUploadingLocal = false;
+  bool get _showAllIssues {
+    if (!mounted) return false;
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    return currentRoute == '/issues';
+  }
 
-  bool get _showAllIssues => CommonData.showAllIssuesInDashboard;
   bool get _showProjectGallery =>
-      !CommonData.showAllIssuesInDashboard &&
+      !_showAllIssues &&
       _selectedProject == null &&
       _selectedLocalProject == null;
 
@@ -87,6 +91,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         CommonData.bimUploadProjectId = userData['bim_upload_project_id'];
         CommonData.bimUploadFolderId = userData['bim_upload_folder_id'];
 
+        /* 
         final expiryStr = userData['subscription_expiry'];
         final isAdmin = userData['is_admin'] == true;
         if (!isAdmin && expiryStr != null) {
@@ -116,11 +121,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
             return;
           }
-        } else if (!isAdmin && expiryStr == null) {
+        }
+        final expiryStr = userData['subscription_expiry'];
+        final isAdmin = userData['is_admin'] == true;
+        if (!isAdmin && expiryStr == null) {
           // No plan at all — send to subscribe
           if (mounted) Navigator.pushReplacementNamed(context, '/subscribe');
           return;
         }
+        */
       }
     } catch (e) {
       debugPrint('Subscription check error: $e');
@@ -224,165 +233,118 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _createProject(String name, PlatformFile? modelFile) async {
-    setState(() => _isCreatingProject = true);
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final body = {'name': name};
-      final response = await http.post(
-        Uri.parse('${CommonData.backendUrl}/projects'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
-      if (response.statusCode == 200) {
-        final newProject = jsonDecode(response.body);
-        if (modelFile != null) {
-          await _uploadModel(newProject['id'], modelFile);
-        }
-        if (mounted) {
-          CommonData.showCustomSnackBar(context, 'Project created');
-        }
-        _fetchProjects();
-      }
-    } finally {
-      if (mounted) setState(() => _isCreatingProject = false);
-    }
-  }
-
-  Future<void> _uploadModel(dynamic projectId, PlatformFile file) async {
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${CommonData.backendUrl}/projects/$projectId/model'),
-      );
-      request.headers['Authorization'] = 'Bearer $token';
-
-      if (file.bytes != null) {
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            file.bytes!,
-            filename: file.name,
-          ),
+  Future<void> _uploadAutodeskFile() async {
+    String? localPath;
+    if (!kIsWeb) {
+      try {
+        localPath = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: 'Select Folder to Upload',
         );
+      } catch (e) {
+        if (mounted)
+          CommonData.showCustomSnackBar(
+            context,
+            'Error picking folder: $e',
+            isError: true,
+          );
+        return;
       }
+    } else {
+      try {
+        final uploadInput = html.FileUploadInputElement();
+        uploadInput.setAttribute('webkitdirectory', '');
+        uploadInput.setAttribute('directory', '');
+        uploadInput.multiple = true;
 
-      var response = await request.send();
-      if (response.statusCode != 200) {
-        debugPrint('Model upload failed: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('Error uploading model: $e');
-    }
-  }
+        uploadInput.click();
 
-  void _showCreateProjectDialog() {
-    final nameCtrl = TextEditingController();
-    PlatformFile? pickedFile;
+        await uploadInput.onChange.first;
+        final files = uploadInput.files;
+        if (files == null || files.isEmpty) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('New Project'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Project Name'),
-                autofocus: true,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      pickedFile?.name ?? 'No 3D model selected',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () async {
-                      try {
-                        debugPrint('Attempting to pick file...');
-                        final result = await FilePicker.platform.pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: ['glb'],
-                          withData: true,
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Select Autodesk Destination'),
+              content: SizedBox(
+                width: 600,
+                height: 500,
+                child: AutodeskFileBrowser(
+                  allowFolderSelection: true,
+                  onFolderSelected:
+                      (
+                        hubId,
+                        hubName,
+                        projectId,
+                        projectName,
+                        folderId,
+                        folderName,
+                      ) async {
+                        Navigator.pop(ctx);
+                        await _performWebAutodeskFolderUpload(
+                          files,
+                          projectId,
+                          folderId,
                         );
-                        if (result != null) {
-                          debugPrint('File picked: ${result.files.first.name}');
-                          setDialogState(() => pickedFile = result.files.first);
-                        } else {
-                          debugPrint('File picking cancelled.');
-                        }
-                      } catch (e) {
-                        debugPrint('FilePicker error: $e');
-                      }
-                    },
-                    child: const Text('ADD 3D MODEL (OPTIONAL)'),
-                  ),
-                ],
+                      },
+                ),
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('CANCEL'),
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: _isCreatingProject
-                  ? null
-                  : () async {
-                      final name = nameCtrl.text.trim();
-                      if (name.isEmpty) return;
-                      setDialogState(() {}); // Trigger dialog rebuild
-                      await _createProject(name, pickedFile);
-                      if (mounted) Navigator.pop(context);
-                    },
-              child: _isCreatingProject
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('CREATE'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+          );
+        }
+        return; // Early return for web flow
+      } catch (e) {
+        if (mounted) {
+          CommonData.showCustomSnackBar(
+            context,
+            'Error picking folder: $e',
+            isError: true,
+          );
+        }
+        return;
+      }
+    }
 
-  void _showAutodeskImportDialog() {
+    if (localPath == null || localPath.isEmpty) return;
+
+    // Now ask for the target Autodesk folder
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Import from Autodesk'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select Autodesk Destination'),
         content: SizedBox(
           width: 600,
-          height: 400,
+          height: 500,
           child: AutodeskFileBrowser(
-            onFileSelected: (projectId, itemId, name) async {
-              Navigator.pop(context);
-              await _importAutodeskFile(projectId, itemId, name);
-            },
+            allowFolderSelection: true,
+            onFolderSelected:
+                (
+                  hubId,
+                  hubName,
+                  projectId,
+                  projectName,
+                  folderId,
+                  folderName,
+                ) async {
+                  Navigator.pop(ctx);
+                  await _performAutodeskFolderUpload(
+                    localPath!,
+                    projectId,
+                    folderId,
+                  );
+                },
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('CANCEL'),
           ),
         ],
@@ -390,180 +352,222 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<void> _importAutodeskFile(
+  Future<void> _performAutodeskFolderUpload(
+    String localPath,
     String projectId,
-    String itemId,
-    String name,
+    String folderId,
   ) async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
+
     try {
-      setState(() => _isLoadingProjects = true);
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final body = {
+        'local_path': localPath,
+        'project_id': projectId,
+        'folder_id': folderId,
+      };
+
       final response = await http.post(
-        Uri.parse('${CommonData.backendUrl}/autodesk/import'),
+        Uri.parse('${CommonData.backendUrl}/autodesk/upload_local_folder'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'project_id': projectId,
-          'item_id': itemId,
-          'name': name,
-        }),
+        body: jsonEncode(body),
       );
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
         if (mounted) {
-          if (data['translation_status'] == 'already_imported') {
-            CommonData.showCustomSnackBar(context, 'Synced');
-          } else {
-            CommonData.showCustomSnackBar(context, 'Synced');
-          }
+          CommonData.showCustomSnackBar(
+            context,
+            'Successfully uploaded folder to Autodesk Cloud',
+          );
         }
-        _fetchProjects();
       } else {
         if (mounted) {
           CommonData.showCustomSnackBar(
             context,
-            'Import failed: ${response.statusCode}',
+            'Upload failed: ${response.body}',
             isError: true,
           );
         }
       }
     } catch (e) {
-      debugPrint('Error importing Autodesk file: $e');
+      debugPrint('Error uploading to Autodesk: $e');
       if (mounted) {
         CommonData.showCustomSnackBar(
           context,
-          'An error occurred during import',
+          'An error occurred during upload',
           isError: true,
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoadingProjects = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingProjects = false;
+        });
+      }
     }
   }
 
-  Future<void> _uploadAutodeskFile() async {
-    // 1. Pick a file
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.any, // Adjust to .glb if needed
-      allowMultiple: false,
-    );
-    if (result == null || result.files.isEmpty) return;
+  Future<void> _performWebAutodeskFolderUpload(
+    List<html.File> files,
+    String projectId,
+    String baseFolderId,
+  ) async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
 
-    final file = result.files.first;
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) return;
 
-    // 2. We need a target Project ID and Folder ID on Autodesk.
-    // A full implementation would show a folder picker here.
-    // For this demonstration, we'll prompt the user for the IDs or show a message
-    // that a folder picker must be selected.
-    // Assuming we have a folder browser similar to AutodeskFileBrowser:
+      if (mounted) {
+        CommonData.showCustomSnackBar(
+          context,
+          'Creating folder structure...',
+          isInfo: true,
+        );
+      }
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Select Autodesk Folder to Upload'),
-          content: const SizedBox(
-            width: 600,
-            height: 400,
-            child: Center(
-              child: Text(
-                'Select a destination folder in Autodesk Construction Cloud.\n(Folder Browser UI to be implemented)',
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // Proceed with upload using dummy IDs for now
-                String targetProjectId = 'dummy_project_id';
-                String targetFolderId = 'dummy_folder_id';
+      // 1. Gather relative paths
+      final Set<String> paths = {};
+      for (final file in files) {
+        String path = file.relativePath ?? '';
+        if (path.isEmpty || path == 'null') {
+          try {
+            path = (file as dynamic).webkitRelativePath?.toString() ?? '';
+          } catch (_) {}
+        }
+        if (path.isNotEmpty) {
+          final parts = path.split('/');
+          if (parts.length > 1) {
+            final dirPath = parts.sublist(0, parts.length - 1).join('/');
+            paths.add(dirPath);
+          }
+        }
+      }
 
-                setDialogState(() {
-                  _isLoadingProjects = true;
-                  _isUploadingLocal = true;
-                });
-                setState(() {}); // Parent sync
+      // 2. Ask backend to bulk create folders
+      final structureBody = {
+        'project_id': projectId,
+        'base_folder_id': baseFolderId,
+        'paths': paths.toList(),
+      };
 
-                try {
-                  final token = await FirebaseAuth.instance.currentUser
-                      ?.getIdToken();
-                  var request = http.MultipartRequest(
-                    'POST',
-                    Uri.parse('${CommonData.backendUrl}/autodesk/upload'),
-                  );
-                  request.headers['Authorization'] = 'Bearer $token';
-                  request.fields['project_id'] = targetProjectId;
-                  request.fields['folder_id'] = targetFolderId;
+      final structureResponse = await http.post(
+        Uri.parse('${CommonData.backendUrl}/autodesk/create_folder_structure'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(structureBody),
+      );
 
-                  request.files.add(
-                    http.MultipartFile.fromBytes(
-                      'file',
-                      file.bytes!,
-                      filename: file.name,
-                    ),
-                  );
+      if (structureResponse.statusCode != 200) {
+        if (mounted) {
+          CommonData.showCustomSnackBar(
+            context,
+            'Failed to create folder structure: ${structureResponse.body}',
+            isError: true,
+          );
+        }
+        return;
+      }
 
-                  var streamedResponse = await request.send();
-                  var response = await http.Response.fromStream(
-                    streamedResponse,
-                  );
+      final folderMap =
+          json.decode(structureResponse.body)['folder_map']
+              as Map<String, dynamic>;
 
-                  if (response.statusCode == 200) {
-                    if (mounted) {
-                      CommonData.showCustomSnackBar(
-                        context,
-                        'Successfully uploaded to Autodesk Cloud',
-                      );
-                    }
-                  } else {
-                    if (mounted) {
-                      CommonData.showCustomSnackBar(
-                        context,
-                        'Upload failed: ${response.body}',
-                        isError: true,
-                      );
-                    }
-                  }
-                } catch (e) {
-                  debugPrint('Error uploading to Autodesk: $e');
-                  if (mounted) {
-                    CommonData.showCustomSnackBar(
-                      context,
-                      'An error occurred during upload',
-                      isError: true,
-                    );
-                  }
-                } finally {
-                  if (mounted) {
-                    setDialogState(() {
-                      _isUploadingLocal = false;
-                      _isLoadingProjects = false;
-                    });
-                    setState(() {});
-                  }
-                }
-              },
-              child: _isUploadingLocal
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('UPLOAD HERE'),
-            ),
-          ],
-        ),
-      ),
-    );
+      if (mounted) {
+        CommonData.showCustomSnackBar(
+          context,
+          'Uploading ${files.length} files...',
+          isInfo: true,
+        );
+      }
+
+      // 3. Upload files individually
+      int successCount = 0;
+      int failCount = 0;
+
+      for (int i = 0; i < files.length; i++) {
+        final file = files[i];
+        String path = file.relativePath ?? '';
+        if (path.isEmpty || path == 'null') {
+          try {
+            path = (file as dynamic).webkitRelativePath?.toString() ?? '';
+          } catch (_) {}
+        }
+
+        String targetFolderId = baseFolderId;
+        if (path.isNotEmpty) {
+          final parts = path.split('/');
+          if (parts.length > 1) {
+            final dirPath = parts.sublist(0, parts.length - 1).join('/');
+            targetFolderId = folderMap[dirPath] ?? baseFolderId;
+          }
+        }
+
+        final request = http.MultipartRequest(
+          'POST',
+          Uri.parse('${CommonData.backendUrl}/autodesk/upload'),
+        );
+        request.headers['Authorization'] = 'Bearer $token';
+        request.fields['project_id'] = projectId;
+        request.fields['folder_id'] = targetFolderId;
+
+        final reader = html.FileReader();
+        reader.readAsArrayBuffer(file);
+        await reader.onLoad.first;
+        final bytes = reader.result as Uint8List;
+
+        request.files.add(
+          http.MultipartFile.fromBytes('file', bytes, filename: file.name),
+        );
+
+        final response = await request.send();
+        if (response.statusCode == 200) {
+          successCount++;
+        } else {
+          failCount++;
+          debugPrint('Failed to upload ${file.name}: ${response.statusCode}');
+        }
+      }
+
+      if (mounted) {
+        if (failCount == 0) {
+          CommonData.showCustomSnackBar(
+            context,
+            'Successfully uploaded folder with $successCount files to Autodesk Cloud',
+          );
+        } else {
+          CommonData.showCustomSnackBar(
+            context,
+            'Uploaded $successCount files, but $failCount failed',
+            isError: true,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error uploading to Autodesk via web: $e');
+      if (mounted) {
+        CommonData.showCustomSnackBar(
+          context,
+          'An error occurred during web upload',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingProjects = false;
+        });
+      }
+    }
   }
 
   void _openProject(Map<String, dynamic> project) {
@@ -812,9 +816,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           project['list_of_teleport_locations'],
           isDark,
         ),
-        _buildCodeBlock(
-          'List_Of_AR_Location_file_path',
+        _buildCodeBlock('List_Of_Rules', project['list_of_rules'], isDark),
+        // Visualized AR Locations
+        _buildDataList(
+          'AR LOCATIONS',
           project['list_of_ar_location_file_path'],
+          isDark,
+          Icons.location_on,
+        ),
+        // Visualized Marker Issues
+        _buildDataList(
+          'MARKER ISSUES',
+          project['list_of_marker_issue'],
+          isDark,
+          Icons.report_problem,
+        ),
+        _buildCodeBlock(
+          'List_Of_Marker_Lable',
+          project['list_of_marker_lable'],
           isDark,
         ),
         _buildCodeBlock(
@@ -825,17 +844,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildCodeBlock(
           'List_Of_Custom_Model_XrPath',
           project['list_of_custom_model_xrpath'],
-          isDark,
-        ),
-        _buildCodeBlock('List_Of_Rules', project['list_of_rules'], isDark),
-        _buildCodeBlock(
-          'List_Of_Marker_Issue',
-          project['list_of_marker_issue'],
-          isDark,
-        ),
-        _buildCodeBlock(
-          'List_Of_Marker_Lable',
-          project['list_of_marker_lable'],
           isDark,
         ),
         _buildCodeBlock(
@@ -852,6 +860,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'Project_udata_Path',
           project['project_udata_path'],
           isDark,
+        ),
+        const SizedBox(height: 48),
+        Text(
+          'PROJECT ISSUES',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+            fontSize: 16,
+            color: Theme.of(context).primaryColor,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          height: 600, // Fixed height for embedded panel
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E2328) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: IssueListPanel(projectId: project['id']),
+          ),
         ),
       ],
     );
@@ -928,10 +959,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const Spacer(),
               TextButton.icon(
-                onPressed: () => setState(() {
-                  CommonData.showAllIssuesInDashboard = false;
-                  _selectedProject = null;
-                }),
+                onPressed: () =>
+                    Navigator.pushReplacementNamed(context, '/dashboard'),
                 icon: const Icon(Icons.folder_open_outlined, size: 16),
                 label: const Text('VIEW PROJECTS'),
               ),
@@ -1001,34 +1030,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    onPressed: _showAutodeskImportDialog,
-                    icon: const Icon(Icons.cloud_download_outlined),
-                    label: const Text('IMPORT FROM AUTODESK'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
                 ],
-                ElevatedButton.icon(
-                  onPressed: _showCreateProjectDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('NEW PROJECT'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -1100,7 +1102,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildLocalProjectDetail(bool isDark) {
     if (_selectedLocalProject == null) return const SizedBox.shrink();
     final project = _selectedLocalProject!;
-    final Map<String, dynamic> data = project['project_data'] ?? {};
 
     return Column(
       children: [
@@ -1139,11 +1140,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const Spacer(),
+              if (project['is_uploaded'] == true) ...[
+                ElevatedButton.icon(
+                  onPressed:
+                      _uploadingLocalProjectNames.contains(project['name'])
+                      ? null
+                      : () => _uploadLocalProject(
+                          project['name'],
+                          project['path'],
+                        ),
+                  icon: _uploadingLocalProjectNames.contains(project['name'])
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync, size: 16),
+                  label: Text(
+                    _uploadingLocalProjectNames.contains(project['name'])
+                        ? "SYNCING..."
+                        : "SYNC CHANGES",
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    foregroundColor: Colors.blue,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
               _DetailTab(
                 icon: Icons.data_object,
                 label: 'METADATA',
-                isActive: true,
-                onTap: () {},
+                isActive: _localDetailTab == 0,
+                onTap: () => setState(() => _localDetailTab = 0),
+              ),
+              const SizedBox(width: 8),
+              _DetailTab(
+                icon: Icons.list_alt_rounded,
+                label: 'ISSUES',
+                isActive: _localDetailTab == 1,
+                onTap: () => setState(() => _localDetailTab = 1),
               ),
             ],
           ),
@@ -1152,10 +1196,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Expanded(
           child: Container(
             color: isDark ? CommonData.darkBackground : const Color(0xFFF1F5F9),
-            child: ListView(
-              padding: const EdgeInsets.all(40),
-              children: [_buildLocalDetailBody(isDark, data)],
-            ),
+            child: _localDetailTab == 0
+                ? ListView(
+                    padding: const EdgeInsets.all(40),
+                    children: [_buildLocalDetailBody(isDark, project)],
+                  )
+                : IssueListPanel(
+                    localIssues:
+                        (project['project_data']
+                            as Map<String, dynamic>?)?['List_Of_Marker_Issue'],
+                  ),
           ),
         ),
       ],
@@ -1268,7 +1318,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildLocalDetailBody(bool isDark, Map<String, dynamic> data) {
+  Widget _buildLocalDetailBody(bool isDark, Map<String, dynamic> project) {
+    final Map<String, dynamic> data = project['project_data'] ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1454,6 +1505,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ], isDark),
         ),
+        if (project['id'] != null) ...[
+          const SizedBox(height: 48),
+          Text(
+            'PROJECT ISSUES',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              fontSize: 16,
+              color: Theme.of(context).primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 600, // Fixed height for embedded panel
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2328) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.withOpacity(0.1)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: IssueListPanel(projectId: project['id']),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1554,9 +1630,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: const Icon(Icons.settings),
               label: const Text("CONFIGURE SYNC PATH"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(
-                  context,
-                ).primaryColor.withOpacity(0.1),
+                backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).primaryColor,
                 side: BorderSide(color: Theme.of(context).primaryColor),
                 padding: const EdgeInsets.symmetric(
@@ -1921,10 +1995,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) async {
     try {
       if (mounted) {
-        CommonData.showCustomSnackBar(
-          context,
-          'Downloading $name to local hardware...',
-        );
+        CommonData.showCustomSnackBar(context, 'Downloading $name...');
       }
       final token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final body = {
@@ -1945,9 +2016,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (response.statusCode == 200) {
         if (mounted) {
+          final data = json.decode(response.body);
           CommonData.showCustomSnackBar(
             context,
-            'Successfully downloaded $name!',
+            data['message'] ?? 'Successfully downloaded $name!',
           );
         }
         // Refresh local projects list automatically
@@ -2133,6 +2205,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() => _loadingCloudProjectIds.remove(projectId));
       }
     }
+  }
+
+  Widget _buildDataList(
+    String title,
+    dynamic data,
+    bool isDark,
+    IconData icon,
+  ) {
+    List<dynamic> items = [];
+    if (data is List) {
+      items = data;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E2328) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.1)),
+              ),
+              child: Text(
+                'No $title defined.',
+                style: TextStyle(
+                  color: isDark ? Colors.white38 : Colors.grey,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E2328) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.1)),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                separatorBuilder: (context, index) =>
+                    Divider(height: 1, color: Colors.grey.withOpacity(0.1)),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  String label = 'Item $index';
+                  if (item is Map) {
+                    label =
+                        item['Teleport_Place_Title'] ??
+                        item['Issue_Title'] ??
+                        item['Name'] ??
+                        'Item $index';
+                  }
+
+                  return ListTile(
+                    leading: Icon(
+                      icon,
+                      color: Theme.of(context).primaryColor,
+                      size: 20,
+                    ),
+                    title: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    subtitle: Text(
+                      item.toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.white38 : Colors.black54,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

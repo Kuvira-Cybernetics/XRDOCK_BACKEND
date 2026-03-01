@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 class APSService:
     def __init__(self):
         self.client_id = os.getenv("AUTODESK_CLIENT_ID", "oQTGX3R5naXNBjUFXcGwxx8SmNgWVtbDMDnDd0Gj4CETI7VZ")
-        self.callback_url = "http://localhost:8001/auth/autodesk/callback"
+        self.callback_url = os.getenv("AUTODESK_CALLBACK_URL", "http://localhost:8001/auth/autodesk/callback")
         self.base_url = "https://developer.api.autodesk.com"
 
     def generate_pkce(self) -> Dict[str, str]:

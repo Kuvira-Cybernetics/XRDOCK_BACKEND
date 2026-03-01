@@ -1,11 +1,11 @@
 {
-    "name": "frontend",
-    "short_name": "frontend",
+    "name": "XR-DOCK",
+    "short_name": "XR-DOCK",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1A1F24",
+    "theme_color": "#4F9CF9",
+    "description": "Spatial BIM intelligence for modern construction.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

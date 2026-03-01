@@ -2,6 +2,7 @@ from fastapi import Header, HTTPException, status
 import firebase_admin
 from firebase_admin import auth, credentials
 import os
+import jwt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -34,14 +35,20 @@ async def verify_firebase_token(authorization: str = Header(default=None)):
     
     token = authorization.split("Bearer ")[1]
     
+    # 1. Try Firebase ID Token (Standard)
     try:
         decoded_token = auth.verify_id_token(token)
-        uid = decoded_token.get('uid')
-        email = decoded_token.get('email')
-        return {"uid": uid, "email": email}
-    except Exception as e:
-        print(f"Firebase verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}"
-        )
+        return {"uid": decoded_token.get('uid'), "email": decoded_token.get('email')}
+    except Exception:
+        # 2. Fallback: Try Symmetric session token (for Unity)
+        try:
+            # We use HS256 with a simple secret for Unity sessions to bypass ID token requirements
+            secret = os.getenv("JWT_SECRET", "xrdock_secret_key_2024")
+            decoded = jwt.decode(token, secret, algorithms=["HS256"])
+            return {"uid": decoded.get("uid"), "email": decoded.get("email")}
+        except Exception as e:
+            print(f"Auth failed (Firebase & Symmetric): {e}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token (neither valid Firebase ID nor session token)"
+            )

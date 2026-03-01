@@ -5,10 +5,6 @@ import 'dart:convert';
 import '../common/common.dart';
 import '../widgets/autodesk_file_browser.dart';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:file_picker/file_picker.dart';
-import 'dart:io' show Platform;
-
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -260,114 +256,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 22),
-                                        child: ElevatedButton.icon(
-                                          onPressed: () async {
-                                            if (!kIsWeb) {
-                                              try {
-                                                String? selectedDirectory =
-                                                    await FilePicker.platform
-                                                        .getDirectoryPath(
-                                                          dialogTitle:
-                                                              'Select Local Sync Folder',
-                                                        );
-                                                if (selectedDirectory != null) {
-                                                  setState(() {
-                                                    _localSyncPathController
-                                                            .text =
-                                                        selectedDirectory;
-                                                  });
-                                                }
-                                              } catch (e) {
-                                                if (mounted) {
-                                                  CommonData.showCustomSnackBar(
-                                                    context,
-                                                    "Error picking folder: $e. Try entering the path manually.",
-                                                    isError: true,
-                                                  );
-                                                }
-                                              }
-                                            } else {
-                                              CommonData.showCustomSnackBar(
-                                                context,
-                                                "Please check your host machine for the folder picker dialog...",
-                                                isInfo: true,
-                                              );
-                                              try {
-                                                final token = await FirebaseAuth
-                                                    .instance
-                                                    .currentUser
-                                                    ?.getIdToken();
-                                                final response = await http.get(
-                                                  Uri.parse(
-                                                    '${CommonData.backendUrl}/system/pick_folder',
-                                                  ),
-                                                  headers: {
-                                                    'Authorization':
-                                                        'Bearer $token',
-                                                  },
-                                                );
-                                                if (response.statusCode ==
-                                                    200) {
-                                                  final data = json.decode(
-                                                    response.body,
-                                                  );
-                                                  if (data['path'] != null &&
-                                                      data['path']
-                                                          .toString()
-                                                          .isNotEmpty) {
-                                                    setState(() {
-                                                      _localSyncPathController
-                                                              .text =
-                                                          data['path'];
-                                                    });
-                                                  }
-                                                } else {
-                                                  if (mounted) {
-                                                    CommonData.showCustomSnackBar(
-                                                      context,
-                                                      "Failed to open native picker from backend.",
-                                                      isError: true,
-                                                    );
-                                                  }
-                                                }
-                                              } catch (e) {
-                                                if (mounted) {
-                                                  CommonData.showCustomSnackBar(
-                                                    context,
-                                                    "Error connecting to backend: $e",
-                                                    isError: true,
-                                                  );
-                                                }
-                                              }
-                                            }
-                                          },
-                                          icon: Icon(
-                                            Icons.folder_open,
-                                            size: 18,
-                                          ),
-                                          label: Text("BROWSE"),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.amber[700],
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 14,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    "This path is where local projects are scanned from. Use BROWSE to select a folder on the host machine.",
+                                    "This path is where local projects are scanned from on the desktop app host machine.",
                                     style: TextStyle(
                                       color: Colors.grey[500],
                                       fontSize: 11,

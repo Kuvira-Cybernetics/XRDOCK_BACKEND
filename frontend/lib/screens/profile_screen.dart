@@ -709,6 +709,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
+            /* 
             if (!isAdmin && plan != 'No Plan') ...[
               const SizedBox(width: 24),
               OutlinedButton(
@@ -730,6 +731,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ],
+            */
           ],
         ),
         TextButton.icon(
