@@ -3,8 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../common/common.dart';
+import '../theme/xrdock_theme.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -64,12 +66,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // Create user directly, or update if they used Google previously
       // If we got here from Google Sign Up, we just need to send the data, but
       // assuming standard email flow here first.
-      UserCredential credential;
       if (FirebaseAuth.instance.currentUser == null) {
-        credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+        UserCredential credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(
+              email: _emailController.text.trim(),
+              password: _passwordController.text.trim(),
+            );
         await credential.user!.updateDisplayName(_nameController.text.trim());
       }
 
@@ -99,18 +101,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
           body: body,
         );
 
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
+        if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
       }
     } on FirebaseAuthException catch (e) {
-      if (mounted) {
+      if (mounted)
         CommonData.showCustomSnackBar(
           context,
           e.message ?? 'Registration failed',
           isError: true,
         );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -156,99 +155,294 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isDesktop = size.width > 900;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: Row(
+        children: [
+          // Left Side: Branding (Desktop only)
+          if (isDesktop)
+            Expanded(
+              flex: 4,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/images/auth_bg.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        Container(color: XRDockTheme.deepNavy),
+                  ),
+                  Container(color: Colors.black.withOpacity(0.4)),
+                  Padding(
+                    padding: const EdgeInsets.all(64),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Image.asset('assets/images/logo.png', height: 48),
+                        const Spacer(),
+                        Text(
+                          'Join XRDOCK\nTransform your Workflow',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Manage XR projects, local data, and issues in one integrated environment.',
+                          style: GoogleFonts.exo2(
+                            fontSize: 18,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Right Side: Multi-step Form
+          Expanded(
+            flex: isDesktop ? 4 : 1,
+            child: Container(
+              color: isDark ? const Color(0xFF0B1221) : Colors.white,
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? size.width * 0.05 : 24,
+              ),
+              child: Center(
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isDesktop) ...[
+                            Image.asset('assets/images/logo.png', height: 32),
+                            const SizedBox(height: 32),
+                          ],
+                          Text(
+                            'CREATE ACCOUNT',
+                            style: GoogleFonts.poppins(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                              color: isDark
+                                  ? Colors.white
+                                  : XRDockTheme.deepNavy,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          // Step Indicator
+                          Row(
+                            children: List.generate(3, (index) {
+                              return Expanded(
+                                child: Container(
+                                  height: 4,
+                                  margin: EdgeInsets.only(
+                                    right: index < 2 ? 8 : 0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _currentStep >= index
+                                        ? XRDockTheme.secondaryPurple
+                                        : Colors.grey.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                          const SizedBox(height: 48),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: _buildCurrentStep(),
+                          ),
+                          const SizedBox(height: 48),
+                          if (_isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else
+                            Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    if (_currentStep > 0)
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: _previousStep,
+                                          child: const Text('BACK'),
+                                        ),
+                                      ),
+                                    if (_currentStep > 0)
+                                      const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Container(
+                                        height: 56,
+                                        decoration: BoxDecoration(
+                                          gradient: XRDockTheme.purpleGradient,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                          ),
+                                          onPressed: _nextStep,
+                                          child: Text(
+                                            _currentStep < 2
+                                                ? 'NEXT'
+                                                : 'CREATE ACCOUNT',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_currentStep == 0) ...[
+                                  const SizedBox(height: 32),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: _signUpWithGoogle,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.g_mobiledata,
+                                            size: 24,
+                                            color: Colors.grey,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'CONTINUE WITH GOOGLE',
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.grey,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Center(
+                                    child: TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: Text(
+                                        'ALREADY HAVE AN ACCOUNT? LOG IN',
+                                        style: GoogleFonts.exo2(
+                                          color: XRDockTheme.secondaryPurple,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentStep() {
+    switch (_currentStep) {
+      case 0:
+        return _buildAccountStep();
+      case 1:
+        return _buildCompanyStep();
+      case 2:
+        return _buildUseCaseStep();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   Widget _buildAccountStep() {
     return Column(
       key: const ValueKey(0),
       children: [
-        Text(
-          'Step 1: Contact Information',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        _buildRow([
+          _buildField(
+            _nameController,
+            'FULL NAME',
+            'John Doe',
+            validator: (v) => v!.isEmpty ? 'Name required' : null,
+          ),
+          _buildField(
+            _jobTitleController,
+            'JOB TITLE',
+            'Project Manager',
+            validator: (v) => v!.isEmpty ? 'Job title required' : null,
+          ),
+        ]),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'FULL NAME'),
-                validator: (v) => v!.isEmpty ? 'Name required' : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _jobTitleController,
-                decoration: const InputDecoration(
-                  labelText: 'JOB TITLE / ROLE',
-                ),
-                validator: (v) => v!.isEmpty ? 'Job title required' : null,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'WORK EMAIL'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Email required';
-                  final emailRegex = RegExp(
-                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                  );
-                  if (!emailRegex.hasMatch(v))
-                    return 'Enter a valid email address';
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'PHONE NUMBER'),
-                keyboardType: TextInputType.phone,
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final phoneRegex = RegExp(r'^\+?[\d\s-]{10,}$');
-                    if (!phoneRegex.hasMatch(v))
-                      return 'Enter a valid phone number';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'PASSWORD'),
-                validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'CONFIRM PASSWORD',
-                ),
-                validator: (v) => v != _passwordController.text
-                    ? 'Passwords do not match'
-                    : null,
-              ),
-            ),
-          ],
-        ),
+        _buildRow([
+          _buildField(
+            _emailController,
+            'WORK EMAIL',
+            'john@company.com',
+            type: TextInputType.emailAddress,
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Email required';
+              final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+              if (!emailRegex.hasMatch(v)) return 'Enter a valid email address';
+              return null;
+            },
+          ),
+          _buildField(
+            _phoneController,
+            'PHONE NUMBER',
+            '+1...',
+            type: TextInputType.phone,
+            validator: (v) {
+              if (v != null && v.isNotEmpty) {
+                final phoneRegex = RegExp(r'^\+?[\d\s-]{10,}$');
+                if (!phoneRegex.hasMatch(v))
+                  return 'Enter a valid phone number';
+              }
+              return null;
+            },
+          ),
+        ]),
+        const SizedBox(height: 24),
+        _buildRow([
+          _buildField(
+            _passwordController,
+            'PASSWORD',
+            '••••••••',
+            obscure: true,
+            validator: (v) => v!.length < 6 ? 'Min 6 chars' : null,
+          ),
+          _buildField(
+            _confirmPasswordController,
+            'CONFIRM',
+            '••••••••',
+            obscure: true,
+            validator: (v) =>
+                v != _passwordController.text ? 'Passwords do not match' : null,
+          ),
+        ]),
       ],
     );
   }
@@ -257,74 +451,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Column(
       key: const ValueKey(1),
       children: [
-        Text(
-          'Step 2: Company Details',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        _buildRow([
+          _buildField(
+            _companyNameController,
+            'COMPANY NAME',
+            'XR Co.',
+            validator: (v) => v!.isEmpty ? 'Company name required' : null,
+          ),
+          _buildField(_companyWebsiteController, 'WEBSITE', 'https://...'),
+        ]),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _companyNameController,
-                decoration: const InputDecoration(labelText: 'COMPANY NAME'),
-                validator: (v) => v!.isEmpty ? 'Company name required' : null,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _companyWebsiteController,
-                decoration: const InputDecoration(labelText: 'COMPANY WEBSITE'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _industryController,
-                decoration: const InputDecoration(labelText: 'INDUSTRY'),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _employeeCountController,
-                decoration: const InputDecoration(
-                  labelText: 'EMPLOYEE COUNT (e.g., 50-200)',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+        _buildRow([
+          _buildField(_industryController, 'INDUSTRY', 'Architecture'),
+          _buildField(_employeeCountController, 'EMPLOYEES', '50-200'),
+        ]),
+        const SizedBox(height: 24),
         DropdownButtonFormField<String>(
           value: _countryController.text.isEmpty
               ? null
               : _countryController.text,
           decoration: const InputDecoration(labelText: 'COUNTRY'),
-          items: const [
-            DropdownMenuItem(
-              value: 'United States',
-              child: Text('United States'),
-            ),
-            DropdownMenuItem(value: 'India', child: Text('India')),
-            DropdownMenuItem(
-              value: 'United Kingdom',
-              child: Text('United Kingdom'),
-            ),
-            DropdownMenuItem(value: 'Canada', child: Text('Canada')),
-            DropdownMenuItem(value: 'Australia', child: Text('Australia')),
-            DropdownMenuItem(value: 'Germany', child: Text('Germany')),
-            DropdownMenuItem(value: 'France', child: Text('France')),
-            DropdownMenuItem(value: 'Other', child: Text('Other')),
-          ],
-          onChanged: (val) {
-            if (val != null) _countryController.text = val;
-          },
+          items: [
+            'United States',
+            'India',
+            'United Kingdom',
+            'Canada',
+            'Australia',
+            'Germany',
+            'France',
+            'Other',
+          ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+          onChanged: (val) => _countryController.text = val ?? '',
           validator: (v) => v == null || v.isEmpty ? 'Country required' : null,
         ),
       ],
@@ -335,208 +492,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Column(
       key: const ValueKey(2),
       children: [
-        Text(
-          'Step 3: Business Use Case',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _projectTypeController,
-                decoration: const InputDecoration(labelText: 'PROJECT TYPE'),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _expectedSeatsController,
-                decoration: const InputDecoration(
-                  labelText: 'EXPECTED NUMBER OF SEATS',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _linkedinController,
-          decoration: const InputDecoration(
-            labelText: 'LINKEDIN URL (Optional)',
+        _buildRow([
+          _buildField(_projectTypeController, 'PROJECT TYPE', 'BIM / VR'),
+          _buildField(
+            _expectedSeatsController,
+            'EXPECTED SEATS',
+            '10',
+            type: TextInputType.number,
           ),
+        ]),
+        const SizedBox(height: 24),
+        _buildField(
+          _linkedinController,
+          'LINKEDIN URL (OPTIONAL)',
+          'https://linkedin.com/...',
         ),
       ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    bool isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildRow(List<Widget> children) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 400)
+          return Column(
+            children: children
+                .expand((w) => [w, const SizedBox(height: 24)])
+                .toList(),
+          );
+        return Row(
+          children:
+              children
+                  .expand(
+                    (w) => [Expanded(child: w), const SizedBox(width: 16)],
+                  )
+                  .toList()
+                ..removeLast(),
+        );
+      },
+    );
+  }
 
-    Widget currentStepWidget;
-    if (_currentStep == 0)
-      currentStepWidget = _buildAccountStep();
-    else if (_currentStep == 1)
-      currentStepWidget = _buildCompanyStep();
-    else
-      currentStepWidget = _buildUseCaseStep();
-
-    return Scaffold(
-      body: Scrollbar(
-        thumbVisibility: true, // Optional but good for desktop
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Column(
-              children: [
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 80,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 40),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: 750,
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      ),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            Row(
-                              children: List.generate(3, (index) {
-                                return Expanded(
-                                  child: Container(
-                                    height: 4,
-                                    margin: EdgeInsets.only(
-                                      right: index < 2 ? 8 : 0,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _currentStep >= index
-                                          ? Theme.of(context).primaryColor
-                                          : Colors.grey.withOpacity(0.3),
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                            const SizedBox(height: 32),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 300),
-                              child: currentStepWidget,
-                            ),
-                            const SizedBox(height: 32),
-                            _isLoading
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Column(
-                                    children: [
-                                      Row(
-                                        children: [
-                                          if (_currentStep > 0)
-                                            Expanded(
-                                              child: OutlinedButton(
-                                                onPressed: _previousStep,
-                                                child: const Text('BACK'),
-                                              ),
-                                            ),
-                                          if (_currentStep > 0)
-                                            const SizedBox(width: 16),
-                                          Expanded(
-                                            child: ElevatedButton(
-                                              onPressed: _nextStep,
-                                              child: Text(
-                                                _currentStep < 2
-                                                    ? 'NEXT'
-                                                    : 'CREATE ACCOUNT',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      if (_currentStep == 0) ...[
-                                        const SizedBox(height: 16),
-                                        Row(
-                                          children: [
-                                            const Expanded(child: Divider()),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                  ),
-                                              child: Text(
-                                                'OR',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade500,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                            const Expanded(child: Divider()),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 16),
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: OutlinedButton.icon(
-                                            onPressed: _signUpWithGoogle,
-                                            icon: Image.network(
-                                              'https://www.google.com/favicon.ico',
-                                              height: 18,
-                                              errorBuilder: (_, __, ___) =>
-                                                  const Icon(
-                                                    Icons.login,
-                                                    size: 18,
-                                                  ),
-                                            ),
-                                            label: const Text(
-                                              'CONTINUE WITH GOOGLE',
-                                            ),
-                                            style: OutlinedButton.styleFrom(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 14,
-                                                  ),
-                                              side: BorderSide(
-                                                color: Colors.grey.shade300,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                            const SizedBox(height: 16),
-                            if (_currentStep == 0)
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('BACK TO LOGIN'),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+  Widget _buildField(
+    TextEditingController controller,
+    String label,
+    String hint, {
+    bool obscure = false,
+    TextInputType type = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: type,
+      decoration: InputDecoration(labelText: label, hintText: hint),
+      validator:
+          validator ??
+          (v) => (v == null || v.isEmpty) && label != 'LINKEDIN URL (OPTIONAL)'
+              ? 'Required'
+              : null,
     );
   }
 }

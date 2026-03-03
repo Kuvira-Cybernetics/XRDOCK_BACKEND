@@ -1,10 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../theme/xrdock_theme.dart';
+
+class DBUser {
+  final String id;
+  final String email;
+  final String name;
+  final bool is_admin;
+  final String? job_title;
+  final String? company_name;
+  final String? autodesk_id;
+  final String? autodesk_email;
+
+  DBUser({
+    required this.id,
+    required this.email,
+    required this.name,
+    this.is_admin = false,
+    this.job_title,
+    this.company_name,
+    this.autodesk_id,
+    this.autodesk_email,
+  });
+
+  factory DBUser.fromJson(Map<String, dynamic> json) {
+    return DBUser(
+      id: json['id'] ?? '',
+      email: json['email'] ?? '',
+      name: json['name'] ?? '',
+      is_admin: json['is_admin'] ?? false,
+      job_title: json['job_title'],
+      company_name: json['company_name'],
+      autodesk_id: json['autodesk_id'],
+      autodesk_email: json['autodesk_email'],
+    );
+  }
+}
 
 class CommonData {
   // Backend Configuration
-
   static String get backendUrl =>
       dotenv.env['BACKEND_URL'] ?? 'http://localhost:8001';
 
@@ -12,28 +47,28 @@ class CommonData {
   static const String googleClientId =
       '816583824921-cn0pkcpi5v94o41culkf2jnpjuhcipr5.apps.googleusercontent.com';
 
-  // App-wide User State (Optional: could also stream from FirebaseAuth.instance)
+  // App-wide User State
   static String? currentUserId;
   static String? currentUserEmail;
   static String? currentUserName;
-  static bool isAutodeskUser =
-      false; // Whether the user has a linked Autodesk account
-  static String? pendingAutodeskToken; // For deep-link capture
+  static DBUser? dbUser;
+  static bool isAutodeskUser = false;
+  static String? pendingAutodeskToken;
   static String? localSyncPath;
   static String? bimUploadHubId;
   static String? bimUploadProjectId;
   static String? bimUploadFolderId;
 
-  static bool showAllIssuesInDashboard = false;
+  static final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(
+    false,
+  );
 
-  // Theme Variables
+  // Compatibility Constants (Legacy)
   static const Color primaryNeon = Color(0xFF00F2FF);
-  static const Color darkBackground = Color(0xFF121212);
-  static const Color glassmorphicBackground = Color(
-    0x33FFFFFF,
-  ); // 20% white for glass
+  static const Color darkBackground = XRDockTheme.deepNavy;
   static const Color panelBackground = Color(0xFF1E1E1E);
 
+  static bool showAllIssuesInDashboard = false;
   static bool isIntentionalLogout = false;
 
   static void showCustomSnackBar(
@@ -43,17 +78,12 @@ class CommonData {
     bool isInfo = false,
   }) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    Color bgColor = Colors.green;
-    IconData icon = Icons.check_circle_outline;
-
-    if (isError) {
-      bgColor = Colors.red;
-      icon = Icons.error_outline;
-    } else if (isInfo) {
-      bgColor = Colors.blueAccent;
-      icon = Icons.info_outline;
-    }
+    Color bgColor = isError
+        ? Colors.red
+        : (isInfo ? Colors.blueAccent : Colors.green);
+    IconData icon = isError
+        ? Icons.error_outline
+        : (isInfo ? Icons.info_outline : Icons.check_circle_outline);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -86,10 +116,11 @@ class CommonData {
         'Session expired. Please log in again.',
         isInfo: true,
       );
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     }
     await FirebaseAuth.instance.signOut();
-    if (!sessionExpired && context.mounted) {
+    dbUser = null;
+    currentUserId = null;
+    if (context.mounted) {
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     }
   }

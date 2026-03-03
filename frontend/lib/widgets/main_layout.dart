@@ -1,18 +1,19 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:html' as html;
+import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
+import '../theme/xrdock_theme.dart';
 import 'user_profile_card.dart';
 
 class MainLayout extends StatefulWidget {
   final Widget child;
-  final VoidCallback onThemeToggle;
+  final String currentRoute;
 
   const MainLayout({
     super.key,
     required this.child,
-    required this.onThemeToggle,
+    required this.currentRoute,
   });
 
   @override
@@ -20,235 +21,267 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  static bool _isCollapsed =
-      false; // Static to preserve state across route changes
+  bool _isCollapsed = false;
 
-  void _logout({bool force = false}) async {
-    if (!force) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Log Out'),
-          content: const Text('Are you sure you want to log out?'),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('CANCEL'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('LOG OUT'),
-            ),
-          ],
+  void _onLogout() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'LOGOUT',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-      );
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: XRDockTheme.primaryPurple,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('LOGOUT'),
+          ),
+        ],
+      ),
+    );
 
-      if (confirm != true) return;
-    }
-
-    await FirebaseAuth.instance.signOut();
-
-    // Clear global state
-    CommonData.currentUserId = null;
-    CommonData.currentUserEmail = null;
-    CommonData.currentUserName = null;
-    CommonData.pendingAutodeskToken = null;
-
-    if (mounted) {
-      if (kIsWeb) {
-        html.window.history.replaceState(null, 'XR-DOCK', '/#/');
-      }
-      Navigator.pushReplacementNamed(context, '/');
+    if (confirm == true) {
+      await FirebaseAuth.instance.signOut();
+      CommonData.logout(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dbUser = CommonData.dbUser;
 
     return Scaffold(
       body: Row(
         children: [
-          // Persistent Sidebar
+          // Sidebar
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
-            width: _isCollapsed ? 80 : 260,
+            width: _isCollapsed ? 80 : 280,
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1A1F24) : Colors.white,
+              color: isDark ? XRDockTheme.deepNavy : Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  color: Colors.black.withOpacity(0.05),
                   blurRadius: 20,
-                  offset: const Offset(4, 0),
+                  offset: const Offset(5, 0),
                 ),
               ],
             ),
-            child: Column(
+            child: Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 32,
-                    horizontal: 16,
+                // Glassmorphism effect for Dark Mode
+                if (isDark)
+                  Positioned.fill(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                      child: Container(color: Colors.white.withOpacity(0.02)),
+                    ),
                   ),
-                  child: _isCollapsed
-                      ? GestureDetector(
-                          onTap: () => setState(() => _isCollapsed = false),
-                          child: Icon(
-                            Icons.menu_open,
-                            color: Theme.of(context).primaryColor,
+
+                Column(
+                  children: [
+                    // Brand / Logo
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 32,
+                        horizontal: 20,
+                      ),
+                      child: Row(
+                        children: [
+                          !_isCollapsed
+                              ? Center(
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    height: 28,
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/sidebar_logo.png',
+                                  height: 28,
+                                ),
+                        ],
+                      ),
+                    ),
+
+                    // User Profile
+                    UserProfileCard(isCollapsed: _isCollapsed),
+                    const SizedBox(height: 32),
+
+                    // Menu Items
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        children: [
+                          _SidebarItem(
+                            icon: Icons.dashboard_outlined,
+                            label: 'PROJECTS',
+                            isSelected: widget.currentRoute == '/dashboard',
+                            onTap: () => Navigator.pushReplacementNamed(
+                              context,
+                              '/dashboard',
+                            ),
+                            isCollapsed: _isCollapsed,
                           ),
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                height: 32,
-                                alignment: Alignment.centerLeft,
-                                fit: BoxFit.contain,
+                          _SidebarItem(
+                            icon: Icons.bug_report_outlined,
+                            label: 'ISSUES',
+                            isSelected: widget.currentRoute == '/issues',
+                            onTap: () => Navigator.pushReplacementNamed(
+                              context,
+                              '/issues',
+                            ),
+                            isCollapsed: _isCollapsed,
+                          ),
+                          // Conditional Admin Module
+                          if (dbUser?.is_admin == true)
+                            _SidebarItem(
+                              icon: Icons.people_outline,
+                              label: 'USERS',
+                              isSelected: widget.currentRoute == '/admin/users',
+                              onTap: () => Navigator.pushReplacementNamed(
+                                context,
+                                '/admin/users',
                               ),
+                              isCollapsed: _isCollapsed,
+                              isSpecial: true,
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.chevron_left, size: 20),
-                              onPressed: () =>
-                                  setState(() => _isCollapsed = true),
+                          _SidebarItem(
+                            icon: Icons.person_outline,
+                            label: 'PROFILE',
+                            isSelected: widget.currentRoute == '/profile',
+                            onTap: () => Navigator.pushReplacementNamed(
+                              context,
+                              '/profile',
                             ),
-                          ],
-                        ),
+                            isCollapsed: _isCollapsed,
+                          ),
+                          _SidebarItem(
+                            icon: Icons.settings_outlined,
+                            label: 'SETTINGS',
+                            isSelected: widget.currentRoute == '/settings',
+                            onTap: () => Navigator.pushReplacementNamed(
+                              context,
+                              '/settings',
+                            ),
+                            isCollapsed: _isCollapsed,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Bottom Actions
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          _SidebarItem(
+                            icon: isDark
+                                ? Icons.light_mode_outlined
+                                : Icons.dark_mode_outlined,
+                            label: isDark ? 'LIGHT MODE' : 'DARK MODE',
+                            isSelected: false,
+                            onTap: () {
+                              final currentMode =
+                                  CommonData.isDarkModeNotifier.value
+                                  ? ThemeMode.dark
+                                  : ThemeMode.light;
+                              CommonData.isDarkModeNotifier.value =
+                                  (currentMode == ThemeMode.light);
+                            },
+                            isCollapsed: _isCollapsed,
+                          ),
+                          _SidebarItem(
+                            icon: Icons.logout_rounded,
+                            label: 'LOGOUT',
+                            isSelected: false,
+                            onTap: _onLogout,
+                            isCollapsed: _isCollapsed,
+                          ),
+                          const SizedBox(height: 16),
+                          IconButton(
+                            onPressed: () =>
+                                setState(() => _isCollapsed = !_isCollapsed),
+                            icon: Icon(
+                              _isCollapsed
+                                  ? Icons.chevron_right_rounded
+                                  : Icons.chevron_left_rounded,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                UserProfileCard(isCollapsed: _isCollapsed),
-                const SizedBox(height: 16),
-                SidebarItem(
-                  icon: Icons.folder_special_outlined,
-                  label: 'PROJECTS',
-                  isCollapsed: _isCollapsed,
-                  isSelected:
-                      currentRoute == '/dashboard' &&
-                      !CommonData.showAllIssuesInDashboard,
-                  onTap: () {
-                    if (currentRoute != '/dashboard') {
-                      Navigator.pushReplacementNamed(context, '/dashboard');
-                    }
-                  },
-                ),
-                SidebarItem(
-                  icon: Icons.list_alt_rounded,
-                  label: 'ISSUES',
-                  isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/issues',
-                  onTap: () {
-                    if (currentRoute != '/issues') {
-                      Navigator.pushReplacementNamed(context, '/issues');
-                    }
-                  },
-                ),
-                SidebarItem(
-                  icon: Icons.person_outline_rounded,
-                  label: 'PROFILE',
-                  isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/profile',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, '/profile');
-                  },
-                ),
-                /*
-                SidebarItem(
-                  icon: Icons.contact_support_outlined,
-                  label: 'CONTACT SALES',
-                  isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/subscribe',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, '/subscribe');
-                  },
-                ),
-                */
-                SidebarItem(
-                  icon: Icons.settings_outlined,
-                  label: 'SETTINGS',
-                  isCollapsed: _isCollapsed,
-                  isSelected: currentRoute == '/settings',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, '/settings');
-                  },
-                ),
-                const Spacer(),
-                SidebarItem(
-                  icon: isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  label: isDark ? 'LIGHT MODE' : 'DARK MODE',
-                  isCollapsed: _isCollapsed,
-                  isSelected: false,
-                  onTap: widget.onThemeToggle,
-                ),
-                if (!_isCollapsed)
-                  const Divider(height: 1, indent: 24, endIndent: 24),
-                SidebarItem(
-                  icon: Icons.logout_rounded,
-                  label: 'LOG OUT',
-                  isCollapsed: _isCollapsed,
-                  isSelected: false,
-                  onTap: _logout,
-                ),
-                const SizedBox(height: 20),
               ],
             ),
           ),
-          // Main Content Area (Child)
-          Expanded(child: widget.child),
+
+          // Main Content
+          Expanded(
+            child: Container(
+              color: isDark
+                  ? XRDockTheme.deepNavy.withOpacity(0.95)
+                  : const Color(0xFFF8FAFC),
+              child: widget.child,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class SidebarItem extends StatelessWidget {
+class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final VoidCallback onTap;
   final bool isCollapsed;
-  final VoidCallback? onTap;
+  final bool isSpecial;
 
-  const SidebarItem({
-    super.key,
+  const _SidebarItem({
     required this.icon,
     required this.label,
     required this.isSelected,
+    required this.onTap,
     required this.isCollapsed,
-    this.onTap,
+    this.isSpecial = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    bool isDark = Theme.of(context).brightness == Brightness.dark;
-    Color primaryColor = Theme.of(context).primaryColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isCollapsed ? 4 : 12,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: isCollapsed ? 0 : 16,
-            vertical: 14,
-          ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(
-            color: isSelected
-                ? primaryColor.withOpacity(0.1)
-                : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
+            gradient: isSelected ? XRDockTheme.purpleGradient : null,
+            boxShadow: isSelected && isDark
+                ? [
+                    BoxShadow(
+                      color: XRDockTheme.primaryPurple.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisAlignment: isCollapsed
@@ -257,27 +290,24 @@ class SidebarItem extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                size: 20,
                 color: isSelected
-                    ? primaryColor
-                    : (isDark ? Colors.white70 : Colors.black54),
+                    ? Colors.white
+                    : (isSpecial ? XRDockTheme.accentLavender : Colors.grey),
+                size: 20,
               ),
               if (!isCollapsed) ...[
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.w500,
-                      color: isSelected
-                          ? primaryColor
-                          : (isDark ? Colors.white70 : Colors.black54),
-                      letterSpacing: 1.2,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? Colors.white70 : XRDockTheme.deepNavy),
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    letterSpacing: 1.1,
+                    fontSize: 13,
                   ),
                 ),
               ],

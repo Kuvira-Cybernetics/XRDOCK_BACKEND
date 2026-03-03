@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:frontend/common/common.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../common/common.dart';
+import '../theme/xrdock_theme.dart';
 
 class UserProfileCard extends StatelessWidget {
   final bool isCollapsed;
@@ -8,24 +10,31 @@ class UserProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    final dbUser = CommonData.dbUser;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Collapsed: plain centered avatar, no container chrome
+    final String name = dbUser?.name ?? firebaseUser?.displayName ?? 'Operator';
+    final String email =
+        dbUser?.email ?? firebaseUser?.email ?? 'Unknown Identity';
+    final String initials =
+        (name.isNotEmpty ? name[0] : (email.isNotEmpty ? email[0] : '?'))
+            .toUpperCase();
+
+    // Collapsed: plain centered avatar
     if (isCollapsed) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Center(
           child: CircleAvatar(
             radius: 20,
-            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.15),
+            backgroundColor: XRDockTheme.primaryPurple.withOpacity(0.1),
             child: Text(
-              (user?.displayName ?? user?.email ?? '?')
-                  .substring(0, 1)
-                  .toUpperCase(),
-              style: TextStyle(
-                color: Theme.of(context).primaryColor,
+              initials,
+              style: GoogleFonts.poppins(
+                color: XRDockTheme.primaryPurple,
                 fontWeight: FontWeight.bold,
+                fontSize: 14,
               ),
             ),
           ),
@@ -33,36 +42,30 @@ class UserProfileCard extends StatelessWidget {
       );
     }
 
-    // Expanded: full card with name + email
+    // Expanded: full card with branding
     return Container(
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.black.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
+            ? Colors.white.withOpacity(0.04)
+            : Colors.black.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
+              ? Colors.white.withOpacity(0.08)
               : Colors.black.withOpacity(0.05),
         ),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 20,
-            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.2),
+            radius: 22,
+            backgroundColor: XRDockTheme.primaryPurple.withOpacity(0.15),
             child: Text(
-              (CommonData.currentUserName ??
-                      user?.displayName ??
-                      CommonData.currentUserEmail ??
-                      user?.email ??
-                      '?')
-                  .substring(0, 1)
-                  .toUpperCase(),
-              style: TextStyle(
-                color: Theme.of(context).primaryColor,
+              initials,
+              style: GoogleFonts.poppins(
+                color: XRDockTheme.primaryPurple,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -74,21 +77,18 @@ class UserProfileCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  CommonData.currentUserName ?? user?.displayName ?? 'Operator',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  name,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                    color: isDark ? Colors.white : XRDockTheme.deepNavy,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  CommonData.currentUserEmail ??
-                      user?.email ??
-                      'Unknown Identity',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey,
-                    fontSize: 10,
-                  ),
+                  email,
+                  style: GoogleFonts.poppins(color: Colors.grey, fontSize: 10),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

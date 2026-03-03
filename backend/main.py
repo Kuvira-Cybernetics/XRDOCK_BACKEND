@@ -129,6 +129,24 @@ async def ensure_valid_autodesk_token(db_user: User, session: AsyncSession) -> s
         if not db_user.autodesk_refresh_token:
              return db_user.autodesk_access_token
         
+        try:
+            print(f"Refreshing Autodesk token for user {db_user.email}...")
+            new_tokens = await aps.refresh_tokens(db_user.autodesk_refresh_token)
+            if new_tokens and "access_token" in new_tokens:
+                db_user.autodesk_access_token = new_tokens["access_token"]
+                db_user.autodesk_refresh_token = new_tokens.get("refresh_token", db_user.autodesk_refresh_token)
+                expires_in = new_tokens.get("expires_in", 3599)
+                db_user.autodesk_token_expires = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                
+                session.add(db_user)
+                await session.commit()
+                await session.refresh(db_user)
+                print("Token refreshed successfully.")
+                return db_user.autodesk_access_token
+        except Exception as e:
+            print(f"Failed to refresh Autodesk token: {e}")
+            # If refresh fails, we'll continue with the old token and let the API call fail with 401
+    
     return db_user.autodesk_access_token
 
 class IssueCreate(BaseModel):
@@ -727,6 +745,7 @@ class AutodeskDownloadRequest(BaseModel):
     item_id: str
     name: str
     is_folder: bool = False
+    local_path: Optional[str] = None
 
 @app.post("/autodesk/download")
 async def autodesk_download(
@@ -778,7 +797,13 @@ async def autodesk_download(
     try:
         # Sanitize root name
         safe_root_name = "".join([c for c in request.name if c.isalnum() or c in (' ', '-', '_')]).strip()
-        project_dir = os.path.join(db_user.local_sync_path, safe_root_name)
+        
+        # Prioritize the local path sent from the client (Unity), fallback to user's default sync path
+        base_path = request.local_path or db_user.local_sync_path
+        if not base_path:
+            raise HTTPException(status_code=400, detail="No local path provided or configured")
+            
+        project_dir = os.path.join(base_path, safe_root_name)
         
         if request.is_folder:
             os.makedirs(project_dir, exist_ok=True)
@@ -795,11 +820,16 @@ async def autodesk_download(
                 json.dump(get_default_project_data(safe_root_name, project_dir), f, indent=4)
         
 
-        # Update the master XRDock.json at the sync root for Unity/Desktop discovery
-        update_master_xrdock_json(db_user.local_sync_path, safe_root_name, project_dir)
+        # Update the master XRDock.json at the chosen root for Unity/Desktop discovery
+        update_master_xrdock_json(base_path, safe_root_name, project_dir)
 
         return {"status": "success", "message": msg}
 
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            print(f"Autodesk token expired during download: {e}")
+            raise HTTPException(status_code=401, detail="Autodesk session expired")
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
         print(f"Error in autodesk_download: {e}")
         raise HTTPException(status_code=500, detail=str(e))

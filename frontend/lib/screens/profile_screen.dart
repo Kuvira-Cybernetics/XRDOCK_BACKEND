@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
+import '../theme/xrdock_theme.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -237,61 +239,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     constraints: const BoxConstraints(maxWidth: 1100),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF15191C) : Colors.white,
+                        color: isDark
+                            ? XRDockTheme.deepNavy.withOpacity(0.8)
+                            : Colors.white.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : Colors.grey.withOpacity(0.2),
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(
-                              isDark ? 0.3 : 0.05,
+                              isDark ? 0.4 : 0.05,
                             ),
                             blurRadius: 30,
                             offset: const Offset(0, 10),
                           ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 1. Top Gradient Banner
-                          _buildGradientBanner(isDark),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 1. Top Gradient Banner
+                              _buildGradientBanner(isDark),
 
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // 2. Profile Header Row
-                                _buildProfileHeader(user, isDark),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  32,
+                                  0,
+                                  32,
+                                  32,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // 2. Profile Header Row
+                                    _buildProfileHeader(user, isDark),
 
-                                const SizedBox(height: 32),
+                                    const SizedBox(height: 32),
 
-                                if (_isLoadingProfile)
-                                  const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(64),
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  )
-                                else ...[
-                                  // 3. Form Grid
-                                  _buildFormGrid(isDesktop, isDark),
+                                    if (_isLoadingProfile)
+                                      const Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(64),
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      )
+                                    else ...[
+                                      // 3. Form Grid
+                                      _buildFormGrid(isDesktop, isDark),
 
-                                  const SizedBox(height: 48),
+                                      const SizedBox(height: 48),
 
-                                  // 4. Email Section
-                                  _buildEmailSection(user, isDark),
+                                      // 4. Email Section
+                                      _buildEmailSection(user, isDark),
 
-                                  const SizedBox(height: 32),
-                                  _buildSubscriptionSummary(
-                                    plan,
-                                    isAdmin,
-                                    isDark,
-                                  ),
-                                ],
-                              ],
-                            ),
+                                      const SizedBox(height: 32),
+                                      _buildSubscriptionSummary(
+                                        plan,
+                                        isAdmin,
+                                        isDark,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -312,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         gradient: LinearGradient(
           colors: isDark
-              ? [const Color(0xFF2C3E50), const Color(0xFF4CA1AF)]
+              ? [XRDockTheme.deepNavy, XRDockTheme.secondaryPurple]
               : [const Color(0xFFE0EAFC), const Color(0xFFCFDEF3)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -392,9 +412,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   _nameController.text.isEmpty
-                      ? 'New User'
-                      : _nameController.text,
-                  style: const TextStyle(
+                      ? 'NEW USER'
+                      : _nameController.text.toUpperCase(),
+                  style: GoogleFonts.poppins(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -402,7 +422,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 4),
                 Text(
                   user?.email ?? '',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[500],
+                    fontSize: 16,
+                  ),
                 ),
               ],
             ),
@@ -428,9 +451,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: Colors.white,
                     ),
                   )
-                : const Text(
-                    'Save Changes',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                : Text(
+                    'SAVE CHANGES',
+                    style: GoogleFonts.orbitron(fontWeight: FontWeight.bold),
                   ),
           ),
         ],
@@ -519,11 +542,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.only(top: 16, bottom: 20),
       child: Text(
         title.toUpperCase(),
-        style: TextStyle(
+        style: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-          color: isDark ? Colors.white54 : Colors.black45,
+          letterSpacing: 2,
+          color: isDark ? Colors.white70 : Colors.black45,
         ),
       ),
     );
@@ -541,8 +564,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            label.toUpperCase(),
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 8),
           TextFormField(
@@ -550,7 +577,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             keyboardType: isNumber ? TextInputType.number : TextInputType.text,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 13),
+              hintStyle: GoogleFonts.poppins(
+                color: Colors.grey[400],
+                fontSize: 13,
+              ),
               filled: true,
               fillColor: Theme.of(context).brightness == Brightness.dark
                   ? Colors.white.withOpacity(0.05)
@@ -613,7 +643,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     .map(
                       (c) => DropdownMenuItem(
                         value: c,
-                        child: Text(c, style: const TextStyle(fontSize: 14)),
+                        child: Text(c, style: GoogleFonts.exo2(fontSize: 14)),
                       ),
                     )
                     .toList(),
@@ -630,9 +660,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "My email Address",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        Text(
+          "MY EMAIL ADDRESS",
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: Colors.grey,
+          ),
         ),
         const SizedBox(height: 16),
         Container(
@@ -663,15 +697,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text(
                       user?.email ?? 'N/A',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "Primary Email",
-                      style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                      "PRIMARY EMAIL",
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey[500],
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -737,7 +775,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         TextButton.icon(
           onPressed: _logout,
           icon: const Icon(Icons.logout, size: 18),
-          label: const Text('Log Out', style: TextStyle(fontSize: 13)),
+          label: Text(
+            'LOG OUT',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
         ),
       ],

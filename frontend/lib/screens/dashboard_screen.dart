@@ -10,6 +10,7 @@ import '../widgets/autodesk_file_browser.dart';
 
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
+import '../widgets/percentage_circular_progress.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -53,6 +54,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return currentRoute == '/issues';
   }
 
+  // Transfer State
+  double _overallProgress = 0.0;
+  bool _isTransferring = false;
+  String _transferMessage = '';
+  final Map<String, double> _individualUploadProgress =
+      {}; // projectName -> progress
+
   bool get _showProjectGallery =>
       !_showAllIssues &&
       _selectedProject == null &&
@@ -61,6 +69,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      html.window.onBeforeUnload.listen((event) {
+        if (_isTransferring) {
+          (event as html.BeforeUnloadEvent).returnValue =
+              'A file transfer is in progress. Closing the site will cancel the operation. Do you want to stay?';
+        }
+      });
+    }
     _checkSubscriptionAndLoad();
   }
 
@@ -191,7 +207,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String projectName,
     String projectPath,
   ) async {
-    setState(() => _uploadingLocalProjectNames.add(projectName));
+    setState(() {
+      _uploadingLocalProjectNames.add(projectName);
+      _individualUploadProgress[projectName] = 0.05;
+      _isTransferring = true;
+      _transferMessage = 'Uploading $projectName...';
+    });
+
+    // Simulate progress while waiting for HTTP response
+    bool isDone = false;
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (isDone || !mounted) return false;
+      setState(() {
+        double current = _individualUploadProgress[projectName] ?? 0.0;
+        if (current < 0.9) {
+          _individualUploadProgress[projectName] = current + 0.1;
+          _overallProgress = current + 0.1;
+        }
+      });
+      return true;
+    });
+
     try {
       if (mounted) {
         CommonData.showCustomSnackBar(
@@ -209,7 +246,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
         body: jsonEncode(body),
       );
+      isDone = true;
       if (response.statusCode == 200) {
+        setState(() {
+          _individualUploadProgress[projectName] = 1.0;
+          _overallProgress = 1.0;
+        });
         if (mounted) {
           CommonData.showCustomSnackBar(
             context,
@@ -228,9 +270,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
     } finally {
-      if (mounted)
-        setState(() => _uploadingLocalProjectNames.remove(projectName));
+      if (mounted) {
+        setState(() {
+          _uploadingLocalProjectNames.remove(projectName);
+          _individualUploadProgress.remove(projectName);
+          _isTransferring = _individualUploadProgress.isNotEmpty;
+        });
+      }
     }
+  }
+
+  // Helper for tracking upload progress
+  void _updateTransferStatus(
+    bool active, {
+    double progress = 0.0,
+    String message = '',
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _isTransferring = active;
+      _overallProgress = progress;
+      _transferMessage = message;
+    });
   }
 
   Future<void> _uploadAutodeskFile() async {
@@ -426,6 +487,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (token == null) return;
 
       if (mounted) {
+        _updateTransferStatus(
+          true,
+          progress: 0.05,
+          message: 'Creating folder structure...',
+        );
         CommonData.showCustomSnackBar(
           context,
           'Creating folder structure...',
@@ -483,6 +549,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               as Map<String, dynamic>;
 
       if (mounted) {
+        _updateTransferStatus(
+          true,
+          progress: 0.1,
+          message: 'Uploading ${files.length} files...',
+        );
         CommonData.showCustomSnackBar(
           context,
           'Uploading ${files.length} files...',
@@ -536,6 +607,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           failCount++;
           debugPrint('Failed to upload ${file.name}: ${response.statusCode}');
         }
+
+        if (mounted) {
+          _updateTransferStatus(
+            true,
+            progress: 0.1 + (0.9 * (i + 1) / files.length),
+            message: 'Uploaded ${i + 1}/${files.length} files...',
+          );
+        }
       }
 
       if (mounted) {
@@ -565,6 +644,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _isLoadingProjects = false;
+          _isTransferring = false;
+          _overallProgress = 0.0;
         });
       }
     }
@@ -586,33 +667,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      color: isDark ? CommonData.darkBackground : const Color(0xFFF8FAFC),
-      child: _showAllIssues
-          ? _buildAllIssuesView(isDark)
-          : _showProjectGallery
-          ? _buildProjectGallery(isDark)
-          : _selectedProject != null
-          ? _buildProjectDetail(isDark)
-          : _selectedLocalProject != null
-          ? _buildLocalProjectDetail(isDark)
-          : Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.folder_open_outlined,
-                    size: 64,
-                    color: Theme.of(context).primaryColor.withOpacity(0.3),
+    return Stack(
+      children: [
+        Container(
+          color: isDark ? CommonData.darkBackground : const Color(0xFFF8FAFC),
+          child: _showAllIssues
+              ? _buildAllIssuesView(isDark)
+              : _showProjectGallery
+              ? _buildProjectGallery(isDark)
+              : _selectedProject != null
+              ? _buildProjectDetail(isDark)
+              : _selectedLocalProject != null
+              ? _buildLocalProjectDetail(isDark)
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.folder_open_outlined,
+                        size: 64,
+                        color: Theme.of(context).primaryColor.withOpacity(0.3),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Select a project from the sidebar',
+                        style: TextStyle(color: Colors.grey, letterSpacing: 1),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Select a project from the sidebar',
-                    style: TextStyle(color: Colors.grey, letterSpacing: 1),
+                ),
+        ),
+        if (_isTransferring)
+          Positioned(
+            bottom: 24,
+            right: 24,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(16),
+              color: isDark ? const Color(0xFF1E2328) : Colors.white,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Theme.of(context).primaryColor.withOpacity(0.2),
                   ),
-                ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PercentageCircularProgress(
+                      progress: _overallProgress,
+                      size: 44,
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _transferMessage.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Keep this tab open',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
+          ),
+      ],
     );
   }
 
@@ -1709,13 +1846,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     top: 12,
                     right: 12,
                     child: _uploadingLocalProjectNames.contains(pName)
-                        ? Container(
-                            padding: const EdgeInsets.all(6),
-                            child: const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                        ? PercentageCircularProgress(
+                            progress: _individualUploadProgress[pName] ?? 0.0,
+                            size: 24,
                           )
                         : isUploaded
                         ? Container(

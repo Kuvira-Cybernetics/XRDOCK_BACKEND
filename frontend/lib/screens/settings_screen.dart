@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
+import '../theme/xrdock_theme.dart';
 import '../widgets/autodesk_file_browser.dart';
+import 'dart:ui';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -139,324 +142,349 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 constraints: const BoxConstraints(maxWidth: 800),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF15191C) : Colors.white,
+                    color: isDark
+                        ? XRDockTheme.deepNavy.withOpacity(0.8)
+                        : Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.grey.withOpacity(0.2),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
                         blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 120,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(24),
-                          ),
-                          gradient: LinearGradient(
-                            colors: isDark
-                                ? [
-                                    const Color(0xFF1A1F24),
-                                    const Color(0xFF2C3E50),
-                                  ]
-                                : [
-                                    const Color(0xFFE0EAFC),
-                                    const Color(0xFFCFDEF3),
-                                  ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(32.0),
-                          child: Align(
-                            alignment: Alignment.bottomLeft,
-                            child: Text(
-                              'SETTINGS',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 120,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(24),
+                              ),
+                              gradient: LinearGradient(
+                                colors: isDark
+                                    ? [
+                                        XRDockTheme.deepNavy,
+                                        XRDockTheme.secondaryPurple,
+                                      ]
+                                    : [
+                                        const Color(0xFFE0EAFC),
+                                        const Color(0xFFCFDEF3),
+                                      ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(32.0),
+                              child: Align(
+                                alignment: Alignment.bottomLeft,
+                                child: Text(
+                                  'SETTINGS',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 24,
                                     color: isDark
                                         ? Colors.white
                                         : Colors.black87,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 2,
                                   ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: _isLoadingSettings
-                            ? const Center(child: CircularProgressIndicator())
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'DESKTOP SYNC SETTINGS',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                      color: isDark
-                                          ? Colors.white54
-                                          : Colors.black45,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Row(
+                          Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: _isLoadingSettings
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              "Local Sync Folder Path",
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            TextFormField(
-                                              controller:
-                                                  _localSyncPathController,
-                                              decoration: InputDecoration(
-                                                hintText:
-                                                    "e.g. C:\\Models or /Users/Name/Models",
-                                                hintStyle: TextStyle(
-                                                  color: Colors.grey[400],
-                                                  fontSize: 13,
+                                      Text(
+                                        'DESKTOP SYNC SETTINGS',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 2,
+                                          color: isDark
+                                              ? Colors.white70
+                                              : Colors.black45,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  "LOCAL SYNC FOLDER PATH",
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 11,
+                                                    color: Colors.grey,
+                                                  ),
                                                 ),
-                                                filled: true,
-                                                fillColor: isDark
-                                                    ? Colors.white.withOpacity(
-                                                        0.05,
-                                                      )
-                                                    : Colors.grey[100],
-                                                border: OutlineInputBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  borderSide: BorderSide.none,
-                                                ),
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 14,
+                                                const SizedBox(height: 8),
+                                                TextFormField(
+                                                  controller:
+                                                      _localSyncPathController,
+                                                  decoration: InputDecoration(
+                                                    hintText:
+                                                        "e.g. C:\\Models or /Users/Name/Models",
+                                                    hintStyle:
+                                                        GoogleFonts.poppins(
+                                                          color:
+                                                              Colors.grey[400],
+                                                          fontSize: 13,
+                                                        ),
+                                                    filled: true,
+                                                    fillColor: isDark
+                                                        ? Colors.white
+                                                              .withOpacity(0.05)
+                                                        : Colors.grey[100],
+                                                    border: OutlineInputBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      borderSide:
+                                                          BorderSide.none,
                                                     ),
-                                              ),
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 14,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        "This path is where local projects are scanned from on the desktop app host machine.",
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.grey[500],
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                      if (CommonData.isAutodeskUser) ...[
+                                        const SizedBox(height: 32),
+                                        Text(
+                                          'AUTODESK UPLOAD SETTINGS',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 2,
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black45,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          "Selected BIM Target Path",
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        TextFormField(
+                                          controller:
+                                              _bimUploadPathDisplayController,
+                                          readOnly: true,
+                                          decoration: InputDecoration(
+                                            hintText:
+                                                "Hub > Project > Folder will appear here",
+                                            hintStyle: GoogleFonts.poppins(
+                                              color: Colors.grey[400],
+                                              fontSize: 13,
+                                            ),
+                                            filled: true,
+                                            fillColor: isDark
+                                                ? Colors.white.withOpacity(0.05)
+                                                : Colors.grey[100],
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              borderSide: BorderSide.none,
+                                            ),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 14,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 24),
+                                        ElevatedButton.icon(
+                                          onPressed: () {
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text(
+                                                  'Select Default Upload Folder',
+                                                ),
+                                                content: SizedBox(
+                                                  width: 600,
+                                                  height: 500,
+                                                  child: AutodeskFileBrowser(
+                                                    allowFolderSelection: true,
+                                                    initialHubId:
+                                                        _bimUploadHubIdController
+                                                            .text
+                                                            .isNotEmpty
+                                                        ? _bimUploadHubIdController
+                                                              .text
+                                                        : null,
+                                                    initialProjectId:
+                                                        _bimUploadProjectIdController
+                                                            .text
+                                                            .isNotEmpty
+                                                        ? _bimUploadProjectIdController
+                                                              .text
+                                                        : null,
+                                                    initialFolderId:
+                                                        _bimUploadFolderIdController
+                                                            .text
+                                                            .isNotEmpty
+                                                        ? _bimUploadFolderIdController
+                                                              .text
+                                                        : null,
+                                                    onFolderSelected:
+                                                        (
+                                                          hubId,
+                                                          hubName,
+                                                          projectId,
+                                                          projectName,
+                                                          folderId,
+                                                          folderName,
+                                                        ) {
+                                                          setState(() {
+                                                            _bimUploadHubIdController
+                                                                    .text =
+                                                                hubId;
+                                                            _bimUploadHubNameController
+                                                                    .text =
+                                                                hubName;
+                                                            _bimUploadProjectIdController
+                                                                    .text =
+                                                                projectId;
+                                                            _bimUploadProjectNameController
+                                                                    .text =
+                                                                projectName;
+                                                            _bimUploadFolderIdController
+                                                                    .text =
+                                                                folderId;
+                                                            _bimUploadFolderNameController
+                                                                    .text =
+                                                                folderName;
+                                                            _updatePathDisplay();
+                                                          });
+                                                          Navigator.pop(ctx);
+                                                        },
+                                                  ),
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(ctx),
+                                                    child: const Text('CANCEL'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.folder_open),
+                                          label: Text(
+                                            'BROWSE AUTODESK HUBS',
+                                            style: GoogleFonts.poppins(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blueAccent,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 24,
+                                              vertical: 14,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 32),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: ElevatedButton(
+                                          onPressed: _isLoading
+                                              ? null
+                                              : _saveSettings,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).primaryColor,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 32,
+                                              vertical: 16,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            elevation: 0,
+                                          ),
+                                          child: _isLoading
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                              : Text(
+                                                  'SAVE SETTINGS',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    "This path is where local projects are scanned from on the desktop app host machine.",
-                                    style: TextStyle(
-                                      color: Colors.grey[500],
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                  if (CommonData.isAutodeskUser) ...[
-                                    const SizedBox(height: 32),
-                                    Text(
-                                      'AUTODESK UPLOAD SETTINGS',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1.2,
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.black45,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    // HUB ID (Read Only)
-                                    const Text(
-                                      "Selected BIM Target Path",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextFormField(
-                                      controller:
-                                          _bimUploadPathDisplayController,
-                                      readOnly: true,
-                                      decoration: InputDecoration(
-                                        hintText:
-                                            "Hub > Project > Folder will appear here",
-                                        hintStyle: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 13,
-                                        ),
-                                        filled: true,
-                                        fillColor: isDark
-                                            ? Colors.white.withOpacity(0.05)
-                                            : Colors.grey[100],
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 14,
-                                            ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    ElevatedButton.icon(
-                                      onPressed: () {
-                                        showDialog(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            title: const Text(
-                                              'Select Default Upload Folder',
-                                            ),
-                                            content: SizedBox(
-                                              width: 600,
-                                              height: 500,
-                                              child: AutodeskFileBrowser(
-                                                allowFolderSelection: true,
-                                                initialHubId:
-                                                    _bimUploadHubIdController
-                                                        .text
-                                                        .isNotEmpty
-                                                    ? _bimUploadHubIdController
-                                                          .text
-                                                    : null,
-                                                initialProjectId:
-                                                    _bimUploadProjectIdController
-                                                        .text
-                                                        .isNotEmpty
-                                                    ? _bimUploadProjectIdController
-                                                          .text
-                                                    : null,
-                                                initialFolderId:
-                                                    _bimUploadFolderIdController
-                                                        .text
-                                                        .isNotEmpty
-                                                    ? _bimUploadFolderIdController
-                                                          .text
-                                                    : null,
-                                                onFolderSelected:
-                                                    (
-                                                      hubId,
-                                                      hubName,
-                                                      projectId,
-                                                      projectName,
-                                                      folderId,
-                                                      folderName,
-                                                    ) {
-                                                      setState(() {
-                                                        _bimUploadHubIdController
-                                                                .text =
-                                                            hubId;
-                                                        _bimUploadHubNameController
-                                                                .text =
-                                                            hubName;
-                                                        _bimUploadProjectIdController
-                                                                .text =
-                                                            projectId;
-                                                        _bimUploadProjectNameController
-                                                                .text =
-                                                            projectName;
-                                                        _bimUploadFolderIdController
-                                                                .text =
-                                                            folderId;
-                                                        _bimUploadFolderNameController
-                                                                .text =
-                                                            folderName;
-                                                        _updatePathDisplay();
-                                                      });
-                                                      Navigator.pop(ctx);
-                                                    },
-                                              ),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.pop(ctx),
-                                                child: const Text('CANCEL'),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.folder_open),
-                                      label: const Text('BROWSE AUTODESK HUBS'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 32),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ElevatedButton(
-                                      onPressed: _isLoading
-                                          ? null
-                                          : _saveSettings,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Theme.of(
-                                          context,
-                                        ).primaryColor,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 32,
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      child: _isLoading
-                                          ? const SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Text(
-                                              'SAVE SETTINGS',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

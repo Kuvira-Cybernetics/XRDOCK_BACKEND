@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
 import 'register_screen.dart';
 import 'dart:convert';
@@ -10,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import '../theme/xrdock_theme.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -34,54 +37,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleCustomToken() async {
     final uri = Uri.base;
-    debugPrint('Checking for token in URL: ${uri.toString()}');
-    debugPrint('Fragment: ${uri.fragment}');
-    debugPrint('Query Parameters: ${uri.queryParameters}');
-
     String? token;
-
-    // 1. Try Fragment (Flutter default for hash routing)
     if (uri.fragment.contains('token=')) {
       final fragmentParts = uri.fragment.split('?');
       if (fragmentParts.length > 1) {
         final queryParams = Uri.splitQueryString(fragmentParts.last);
-        token = queryParams['token'];
-        debugPrint('Token found in fragment: $token');
+        final customToken = queryParams['token'];
+        if (customToken != null) {
+          CommonData.isAutodeskUser = true;
+          token = customToken;
+        }
       }
     }
-
-    // 2. Try Search Params (if redirecting top-level or without hash)
     if (token == null && uri.queryParameters.containsKey('token')) {
       token = uri.queryParameters['token'];
-      debugPrint('Token found in query parameters: $token');
+      if (token != null) CommonData.isAutodeskUser = true;
     }
-
-    // 3. Try preserved token from startup (CommonData)
     if (token == null && CommonData.pendingAutodeskToken != null) {
       token = CommonData.pendingAutodeskToken;
-      debugPrint('Using preserved token from startup: $token');
-      // Clear it so it's not used again if navigating back to login
       CommonData.pendingAutodeskToken = null;
+      if (token != null) CommonData.isAutodeskUser = true;
     }
 
     if (token != null) {
-      debugPrint('Found custom token, cleaning URL and signing in...');
-
       if (kIsWeb) {
-        // CLEAN THE URL IMMEDIATELY after extracting the token
-        // This prevents the token from being read again if the page re-initializes
         html.window.history.replaceState(null, 'XR-DOCK', '/#/');
       }
 
       setState(() => _isLoading = true);
       try {
         await FirebaseAuth.instance.signInWithCustomToken(token);
-
         if (mounted) {
           Navigator.pushReplacementNamed(context, '/dashboard');
         }
       } catch (e) {
-        debugPrint('Custom token sign-in error: $e');
         if (mounted) {
           CommonData.showCustomSnackBar(
             context,
@@ -97,7 +86,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signInWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -123,21 +111,18 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      // For Web, passing the clientId is required
       final googleSignIn = GoogleSignIn(clientId: CommonData.googleClientId);
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         setState(() => _isLoading = false);
         return;
       }
-
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-
       await FirebaseAuth.instance.signInWithCredential(credential);
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/dashboard');
@@ -155,194 +140,18 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      body: Scrollbar(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 100,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 50),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: 400,
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.white.withAlpha(200),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                      ),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            Text(
-                              'SIGN IN',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.titleLarge?.copyWith(fontSize: 18),
-                            ),
-                            const SizedBox(height: 32),
-                            TextFormField(
-                              controller: _emailController,
-                              decoration: const InputDecoration(
-                                labelText: 'EMAIL ADDRESS',
-                                prefixIcon: Icon(Icons.email_outlined),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) {
-                                  return 'Email required';
-                                }
-                                if (!v.contains('@'))
-                                  return 'Enter valid email';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: true,
-                              decoration: const InputDecoration(
-                                labelText: 'PASSWORD',
-                                prefixIcon: Icon(Icons.lock_outline),
-                              ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) {
-                                  return 'Password required';
-                                }
-                                if (v.length < 6) return 'Min 6 characters';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 32),
-                            _isLoading
-                                ? const CircularProgressIndicator()
-                                : Column(
-                                    children: [
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: ElevatedButton(
-                                          onPressed: _signInWithEmail,
-                                          child: const Text('LOGIN'),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      const Text('OR'),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: OutlinedButton.icon(
-                                          onPressed: _signInWithGoogle,
-                                          icon: const Icon(
-                                            Icons.g_mobiledata,
-                                            size: 32,
-                                          ),
-                                          label: const Text(
-                                            'Sign-In with Google',
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 16,
-                                            ),
-                                            side: BorderSide(
-                                              color: Colors.grey.shade400,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: OutlinedButton.icon(
-                                          onPressed: _signInWithAutodesk,
-                                          icon: const Icon(
-                                            Icons.settings_input_component,
-                                            size: 24,
-                                          ),
-                                          label: const Text(
-                                            'Sign-In with Autodesk',
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 16,
-                                            ),
-                                            side: BorderSide(
-                                              color: Colors.grey.shade400,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                            const SizedBox(height: 24),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('NO ACCOUNT?'),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const RegisterScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: const Text('REGISTER'),
-                                ),
-                              ],
-                            ),
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pushNamed(context, '/subscribe'),
-                              child: const Text('CONTACT SALES / PRICING'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _signInWithAutodesk() async {
     setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       String url = '${CommonData.backendUrl}/auth/autodesk/login';
-      if (user != null) {
-        url += '?firebase_uid=${user.uid}';
-      }
+      if (user != null) url += '?firebase_uid=${user.uid}';
 
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final loginUrl = data['url'];
-        debugPrint('Redirecting to Autodesk: $loginUrl');
-
         if (kIsWeb) {
-          // Use direct JS redirection to avoid opening two tabs
           html.window.location.href = loginUrl;
         } else {
           if (await canLaunchUrl(Uri.parse(loginUrl))) {
@@ -350,12 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
               Uri.parse(loginUrl),
               mode: LaunchMode.externalApplication,
             );
-          } else {
-            throw 'Could not launch $loginUrl';
           }
         }
-      } else {
-        throw 'Failed to get login URL: ${response.body}';
       }
     } catch (e) {
       if (mounted) {
@@ -368,5 +173,325 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isDesktop = size.width > 900;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: Row(
+        children: [
+          // Left Side: Branding & Image (Desktop only)
+          if (isDesktop)
+            Expanded(
+              flex: 4,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/images/auth_bg.webp', // Fallback to asset if exists, or use generated
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF060918), Color(0xFF1A1F24)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.art_track_rounded,
+                          size: 100,
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(color: Colors.black.withOpacity(0.3)),
+                  Padding(
+                    padding: const EdgeInsets.all(64.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Image.asset(
+                          'assets/images/logo.png',
+                          height: 48,
+                          filterQuality: FilterQuality.high,
+                        ),
+                        // const Spacer(),
+                        // Text(
+                        //   'Capturing Moments,\nCreating Memories',
+                        //   style: GoogleFonts.orbitron(
+                        //     fontSize: 48,
+                        //     fontWeight: FontWeight.bold,
+                        //     color: Colors.white,
+                        //     letterSpacing: 2,
+                        //   ),
+                        // ),
+                        // const SizedBox(height: 24),
+                        // Text(
+                        //   'The ultimate platform for XR Project Management',
+                        //   style: GoogleFonts.exo2(
+                        //     fontSize: 18,
+                        //     color: Colors.white70,
+                        //     letterSpacing: 1.2,
+                        //   ),
+                        // ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Right Side: Login Form
+          Expanded(
+            flex: isDesktop ? 3 : 1,
+            child: Container(
+              color: isDark ? const Color(0xFF0B1221) : Colors.white,
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? size.width * 0.05 : 32,
+              ),
+              child: Center(
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isDesktop) ...[
+                            Image.asset('assets/images/logo.png', height: 40),
+                            const SizedBox(height: 48),
+                          ],
+                          Text(
+                            'SIGN IN',
+                            style: GoogleFonts.poppins(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                              color: isDark
+                                  ? Colors.white
+                                  : XRDockTheme.deepNavy,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text(
+                                "Don't have an account? ",
+                                style: GoogleFonts.poppins(color: Colors.grey),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Register',
+                                  style: TextStyle(
+                                    color: XRDockTheme.secondaryPurple,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 48),
+                          TextFormField(
+                            controller: _emailController,
+                            decoration: const InputDecoration(
+                              labelText: 'EMAIL ADDRESS',
+                              hintText: 'name@company.com',
+                            ),
+                            validator: (v) => (v == null || !v.contains('@'))
+                                ? 'Valid email required'
+                                : null,
+                          ),
+                          const SizedBox(height: 24),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              labelText: 'PASSWORD',
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                            validator: (v) => (v == null || v.length < 6)
+                                ? 'Min 6 characters'
+                                : null,
+                          ),
+                          const SizedBox(height: 48),
+                          _isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : Column(
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 56,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          gradient: XRDockTheme.purpleGradient,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                          ),
+                                          onPressed: _signInWithEmail,
+                                          child: const Text('SIGN IN'),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 32),
+                                    Row(
+                                      children: [
+                                        const Expanded(child: Divider()),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                          ),
+                                          child: Text(
+                                            'OR LOGIN WITH',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              color: Colors.grey,
+                                              letterSpacing: 1,
+                                            ),
+                                          ),
+                                        ),
+                                        const Expanded(child: Divider()),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 32),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _SocialButton(
+                                            assetPath:
+                                                'assets/images/google_g.png',
+                                            label: 'GOOGLE',
+                                            onTap: _signInWithGoogle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: _SocialButton(
+                                            assetPath:
+                                                'assets/images/autodesk_logo.png',
+                                            label: 'AUTODESK',
+                                            onTap: _signInWithAutodesk,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                          const SizedBox(height: 48),
+                          Center(
+                            child: TextButton(
+                              onPressed: () =>
+                                  Navigator.pushNamed(context, '/subscribe'),
+                              child: Text(
+                                'CONTACT SALES / PRICING',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialButton extends StatelessWidget {
+  final String? assetPath;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SocialButton({
+    this.assetPath,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+          border: Border.all(
+            color: isDark ? Colors.white10 : Colors.grey.shade200,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (assetPath != null) Image.asset(assetPath!, height: 24),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: isDark ? Colors.white : XRDockTheme.deepNavy,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

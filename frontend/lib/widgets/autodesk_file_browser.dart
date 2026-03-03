@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../common/common.dart';
+import 'percentage_circular_progress.dart';
 
 class AutodeskFileBrowser extends StatefulWidget {
   final void Function(
@@ -68,6 +69,8 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
   String? _selectedFolderName;
   List<Map<String, String>> _folderHistory = []; // List of {id: ..., name: ...}
   final Set<String> _loadingIds = {};
+  final Set<String> _deletingIds = {};
+  final Map<String, double> _transferProgress = {}; // itemId -> 0.0-1.0
 
   @override
   void initState() {
@@ -629,13 +632,15 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (_loadingIds.contains(item['id']))
+                            PercentageCircularProgress(
+                              progress: _transferProgress[item['id']] ?? 0.05,
+                              size: 32,
+                            )
+                          else if (_deletingIds.contains(item['id']))
                             const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.blueAccent,
-                              ),
+                              width: 32,
+                              height: 32,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           else ...[
                             if (widget.onDownload != null &&
@@ -645,7 +650,32 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                                   Icons.download_for_offline_outlined,
                                 ),
                                 onPressed: () async {
-                                  setState(() => _loadingIds.add(item['id']));
+                                  setState(() {
+                                    _loadingIds.add(item['id']);
+                                    _transferProgress[item['id']] = 0.0;
+                                  });
+
+                                  // Simulate progress for UI demonstration
+                                  // In a real app, this would be updated via a stream or feedback callback
+                                  Future.doWhile(() async {
+                                    await Future.delayed(
+                                      const Duration(milliseconds: 300),
+                                    );
+                                    if (!mounted ||
+                                        !_loadingIds.contains(item['id'])) {
+                                      return false;
+                                    }
+                                    setState(() {
+                                      double current =
+                                          _transferProgress[item['id']] ?? 0.0;
+                                      if (current < 0.9) {
+                                        _transferProgress[item['id']] =
+                                            current + 0.1;
+                                      }
+                                    });
+                                    return true;
+                                  });
+
                                   try {
                                     await widget.onDownload!(
                                       _selectedProjectId!,
@@ -653,11 +683,20 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                                       name,
                                       isFolder,
                                     );
+                                    if (mounted) {
+                                      setState(() {
+                                        _transferProgress[item['id']] = 1.0;
+                                      });
+                                    }
                                   } finally {
                                     if (mounted) {
-                                      setState(
-                                        () => _loadingIds.remove(item['id']),
+                                      await Future.delayed(
+                                        const Duration(milliseconds: 500),
                                       );
+                                      setState(() {
+                                        _loadingIds.remove(item['id']);
+                                        _transferProgress.remove(item['id']);
+                                      });
                                     }
                                   }
                                 },
@@ -697,7 +736,9 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                                     ),
                                   );
                                   if (confirmed == true) {
-                                    setState(() => _loadingIds.add(item['id']));
+                                    setState(
+                                      () => _deletingIds.add(item['id']),
+                                    );
                                     try {
                                       await widget.onDelete!(
                                         _selectedProjectId!,
@@ -708,7 +749,7 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                                     } finally {
                                       if (mounted) {
                                         setState(
-                                          () => _loadingIds.remove(item['id']),
+                                          () => _deletingIds.remove(item['id']),
                                         );
                                       }
                                       // Force refresh to remove deleted item
