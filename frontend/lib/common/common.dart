@@ -26,7 +26,7 @@ class DBUser {
 
   factory DBUser.fromJson(Map<String, dynamic> json) {
     return DBUser(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       email: json['email'] ?? '',
       name: json['name'] ?? '',
       is_admin: json['is_admin'] ?? false,
@@ -51,7 +51,8 @@ class CommonData {
   static String? currentUserId;
   static String? currentUserEmail;
   static String? currentUserName;
-  static DBUser? dbUser;
+  static DBUser? get dbUser => userProfileNotifier.value;
+  static set dbUser(DBUser? val) => userProfileNotifier.value = val;
   static bool isAutodeskUser = false;
   static String? pendingAutodeskToken;
   static String? localSyncPath;
@@ -62,6 +63,9 @@ class CommonData {
   static final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(
     false,
   );
+
+  static final ValueNotifier<DBUser?> userProfileNotifier =
+      ValueNotifier<DBUser?>(null);
 
   // Compatibility Constants (Legacy)
   static const Color primaryNeon = Color(0xFF00F2FF);

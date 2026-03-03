@@ -134,7 +134,7 @@ class _IssueListPanelState extends State<IssueListPanel> {
               ? Center(
                   child: Text(
                     'NO ISSUES FOUND',
-                    style: GoogleFonts.orbitron(color: Colors.grey),
+                    style: GoogleFonts.poppins(color: Colors.grey),
                   ),
                 )
               : ListView.builder(

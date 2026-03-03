@@ -86,7 +86,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _signInWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+    // Note: _isLoading handled by caller or here
+    bool previouslyLoading = _isLoading;
+    if (!previouslyLoading) setState(() => _isLoading = true);
+
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
@@ -103,6 +106,66 @@ class _LoginScreenState extends State<LoginScreen> {
           isError: true,
         );
       }
+    } finally {
+      if (mounted && !previouslyLoading) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleSmartSignIn() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      CommonData.showCustomSnackBar(
+        context,
+        'Please enter your email',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '${CommonData.backendUrl}/auth/check-provider?email=${Uri.encodeComponent(email)}',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final provider = data['provider'];
+
+        if (provider == 'google') {
+          debugPrint('Smart Routing: Found Google account for $email');
+          // If it's a Google account, trigger Google Sign-In immediately
+          await _signInWithGoogle();
+          return; // _signInWithGoogle handled Navigator and loading
+        } else if (provider == 'autodesk') {
+          debugPrint('Smart Routing: Found Autodesk account for $email');
+          await _signInWithAutodesk();
+          return;
+        } else {
+          // Standard password flow
+          debugPrint('Smart Routing: Defaulting to password for $email');
+          if (_passwordController.text.trim().isEmpty) {
+            CommonData.showCustomSnackBar(
+              context,
+              'This email is registered with an XRDOCK account. Please enter your password.',
+              isInfo: true,
+            );
+            setState(() => _isLoading = false);
+            return;
+          } else {
+            await _signInWithEmail();
+            return;
+          }
+        }
+      } else {
+        // Fallback to email/password if check fails
+        await _signInWithEmail();
+      }
+    } catch (e) {
+      debugPrint('Smart Sign-In Error: $e');
+      await _signInWithEmail();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -225,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // const Spacer(),
                         // Text(
                         //   'Capturing Moments,\nCreating Memories',
-                        //   style: GoogleFonts.orbitron(
+                        //   style: GoogleFonts.poppins(
                         //     fontSize: 48,
                         //     fontWeight: FontWeight.bold,
                         //     color: Colors.white,
@@ -235,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // const SizedBox(height: 24),
                         // Text(
                         //   'The ultimate platform for XR Project Management',
-                        //   style: GoogleFonts.exo2(
+                        //   style: GoogleFonts.poppins(
                         //     fontSize: 18,
                         //     color: Colors.white70,
                         //     letterSpacing: 1.2,
@@ -305,10 +368,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           const SizedBox(height: 48),
+                          Text(
+                            'EMAIL ADDRESS',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           TextFormField(
                             controller: _emailController,
                             decoration: const InputDecoration(
-                              labelText: 'EMAIL ADDRESS',
                               hintText: 'name@company.com',
                             ),
                             validator: (v) => (v == null || !v.contains('@'))
@@ -316,11 +387,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : null,
                           ),
                           const SizedBox(height: 24),
+                          Text(
+                            'PASSWORD',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
-                              labelText: 'PASSWORD',
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword
@@ -359,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             backgroundColor: Colors.transparent,
                                             shadowColor: Colors.transparent,
                                           ),
-                                          onPressed: _signInWithEmail,
+                                          onPressed: _handleSmartSignIn,
                                           child: const Text('SIGN IN'),
                                         ),
                                       ),

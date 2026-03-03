@@ -12,7 +12,7 @@ import httpx
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from firebase_admin import auth
 import jwt
 import smtplib
@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from models import Issue, Project, User, UserUpdate, ProjectCreate, ProjectUpdate, IssueUpdate, PKCEState, FolderStructureRequest, ContactRequest
+from models import Issue, Project, User, UserUpdate, ProjectCreate, ProjectUpdate, IssueUpdate, PKCEState, FolderStructureRequest, ContactRequest, DocumentationTopic, DocumentationSection
 from db import init_db, get_session
 from dependencies import verify_firebase_token
 from aps_service import APSService
@@ -159,15 +159,58 @@ class IssueCreate(BaseModel):
     y_coord: Optional[float] = None
     z_coord: Optional[float] = None
 
+async def verify_admin_token(user: dict = Depends(verify_firebase_token), session: AsyncSession = Depends(get_session)):
+    db_user = await get_user_by_firebase_uid(user["uid"], session)
+    if not db_user or not db_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return db_user
+
+class DocumentationTopicCreate(BaseModel):
+    parent_id: Optional[int] = None
+    title: str
+    icon_name: str = "description_outlined"
+    order_index: int = 0
+
+class DocumentationSectionCreate(BaseModel):
+    topic_id: int
+    type: str
+    title: Optional[str] = None
+    content_text: Optional[str] = None
+    media_url: Optional[str] = None
+    media_list: Optional[str] = None
+    order_index: int = 0
+
 app = FastAPI(title="XRDOCK Backend API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5000",
+        "http://localhost:8001",
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:8001",
+        "http://localhost",
+        "http://127.0.0.1",
+        "https://localhost:5000",
+        "https://127.0.0.1:5000",
+        "https://app.xrdock.in",
+        "https://api.xrdock.in",
+        "https://www.app.xrdock.in",
+        "https://www.api.xrdock.in",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    origin = request.headers.get("origin")
+    if origin:
+        print(f"Request from origin: {origin}")
+    response = await call_next(request)
+    return response
 
 # Static files for 3D models
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -176,9 +219,250 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def on_startup():
     await init_db()
 
+# --- Documentation Endpoints ---
+
+@app.get("/docs/content")
+async def get_all_docs(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(
+        select(DocumentationTopic).order_by(DocumentationTopic.order_index, DocumentationTopic.id)
+    )
+    topics = result.scalars().all()
+    
+    output = []
+    for topic in topics:
+        sec_result = await session.execute(
+            select(DocumentationSection)
+            .where(DocumentationSection.topic_id == topic.id)
+            .order_by(DocumentationSection.order_index, DocumentationSection.id)
+        )
+        sections = sec_result.scalars().all()
+        output.append({
+            "id": topic.id,
+            "parent_id": topic.parent_id,
+            "title": topic.title,
+            "icon_name": topic.icon_name,
+            "order_index": topic.order_index,
+            "sections": [
+                {
+                    "id": s.id,
+                    "type": s.type,
+                    "title": s.title,
+                    "content_text": s.content_text,
+                    "media_url": s.media_url,
+                    "media_list": s.media_list,
+                    "order_index": s.order_index
+                } for s in sections
+            ]
+        })
+    return output
+
+@app.get("/docs/search")
+async def search_docs(q: str, session: AsyncSession = Depends(get_session)):
+    """Search topics and sections for keywords."""
+    # Search topics
+    topic_stmt = select(DocumentationTopic).where(DocumentationTopic.title.ilike(f"%{q}%"))
+    topic_result = await session.execute(topic_stmt)
+    found_topics = topic_result.scalars().all()
+    
+    # Search sections
+    sec_stmt = select(DocumentationSection).where(
+        (DocumentationSection.title.ilike(f"%{q}%")) | 
+        (DocumentationSection.content_text.ilike(f"%{q}%"))
+    )
+    sec_result = await session.execute(sec_stmt)
+    found_sections = sec_result.scalars().all()
+    
+    # Format results
+    results = []
+    for t in found_topics:
+        results.append({
+            "type": "topic",
+            "id": t.id,
+            "title": t.title,
+            "parent_id": t.parent_id
+        })
+    
+    for s in found_sections:
+        # Get topic info for context
+        t_stmt = select(DocumentationTopic).where(DocumentationTopic.id == s.topic_id)
+        t_res = await session.execute(t_stmt)
+        topic = t_res.scalar_one_or_none()
+        
+        results.append({
+            "type": "section",
+            "id": s.id,
+            "topic_id": s.topic_id,
+            "topic_title": topic.title if topic else "Unknown",
+            "title": s.title or "Untitled Section",
+            "snippet": (s.content_text[:100] + "...") if s.content_text else ""
+        })
+        
+    return results
+
+@app.post("/admin/docs/topics")
+async def create_doc_topic(
+    request: DocumentationTopicCreate,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    topic = DocumentationTopic(**request.dict())
+    session.add(topic)
+    await session.commit()
+    await session.refresh(topic)
+    return topic
+
+@app.patch("/admin/docs/topics/{topic_id}")
+async def update_doc_topic(
+    topic_id: int,
+    request: DocumentationTopicCreate,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    result = await session.execute(select(DocumentationTopic).where(DocumentationTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    
+    for key, value in request.dict(exclude_unset=True).items():
+        setattr(topic, key, value)
+    
+    session.add(topic)
+    await session.commit()
+    await session.refresh(topic)
+    return topic
+
+@app.delete("/admin/docs/topics/{topic_id}")
+async def delete_doc_topic(
+    topic_id: int,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    result = await session.execute(select(DocumentationTopic).where(DocumentationTopic.id == topic_id))
+    topic = result.scalar_one_or_none()
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    
+    await session.delete(topic)
+    await session.commit()
+    return {"status": "success"}
+
+@app.post("/admin/docs/sections")
+async def create_doc_section(
+    request: DocumentationSectionCreate,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    section = DocumentationSection(**request.dict())
+    session.add(section)
+    await session.commit()
+    await session.refresh(section)
+    return section
+
+@app.patch("/admin/docs/sections/{section_id}")
+async def update_doc_section(
+    section_id: int,
+    request: DocumentationSectionCreate,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    result = await session.execute(select(DocumentationSection).where(DocumentationSection.id == section_id))
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    
+    for key, value in request.dict(exclude_unset=True).items():
+        setattr(section, key, value)
+    
+    session.add(section)
+    await session.commit()
+    await session.refresh(section)
+    return section
+
+@app.delete("/admin/docs/sections/{section_id}")
+async def delete_doc_section(
+    section_id: int,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(verify_admin_token)
+):
+    result = await session.execute(select(DocumentationSection).where(DocumentationSection.id == section_id))
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    
+    await session.delete(section)
+    await session.commit()
+    return {"status": "success"}
+
+@app.post("/admin/docs/upload")
+async def upload_doc_media(
+    file: UploadFile = File(...),
+    admin: User = Depends(verify_admin_token)
+):
+    import uuid
+    os.makedirs(os.path.join("static", "docs_media"), exist_ok=True)
+    
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join("static", "docs_media", unique_filename)
+    
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+    
+    # Return the URL relative to the server
+    return {"status": "success", "url": f"/static/docs_media/{unique_filename}"}
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to XRDOCK API"}
+
+@app.get("/list_app_versions")
+async def list_app_versions():
+    zip_path = os.getenv("APP_DOWNLOAD_PATH", os.path.join("downloads", "xrdock.zip"))
+    directory = os.path.dirname(os.path.abspath(zip_path))
+    
+    if not os.path.exists(directory):
+        return {"versions": []}
+    
+    versions = []
+    for f in os.listdir(directory):
+        if f.lower().endswith(".zip"):
+            file_path = os.path.join(directory, f)
+            stats = os.stat(file_path)
+            versions.append({
+                "filename": f,
+                "size": stats.st_size,
+                "modified": stats.st_mtime
+            })
+    
+    # Sort by modification time (newest first)
+    versions.sort(key=lambda x: x["modified"], reverse=True)
+    return {"versions": versions}
+
+@app.get("/download_app")
+async def download_app(filename: Optional[str] = None):
+    zip_path = os.getenv("APP_DOWNLOAD_PATH", os.path.join("downloads", "xrdock.zip"))
+    directory = os.path.dirname(os.path.abspath(zip_path))
+    
+    if filename:
+        # Prevent traversal
+        safe_filename = os.path.basename(filename)
+        target_path = os.path.join(directory, safe_filename)
+    else:
+        target_path = zip_path
+
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail="App ZIP file not found")
+    
+    return FileResponse(
+        path=target_path,
+        filename=os.path.basename(target_path),
+        media_type="application/zip",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
 
 @app.get("/auth-status")
 async def auth_status(user: dict = Depends(verify_firebase_token)):
@@ -212,6 +496,40 @@ async def pick_folder():
         return {"path": result['folder']}
     else:
         return {"path": None}
+
+@app.get("/auth/check-provider")
+async def check_auth_provider(email: str, session: AsyncSession = Depends(get_session)):
+    """Determines the auth provider for a given email to support smart login."""
+    print(f"--- DEBUG: Checking Auth Provider for {email} ---")
+    try:
+        stmt = select(User).where(User.email == email)
+        result = await session.execute(stmt)
+        # Use first() instead of scalar_one_or_none to handle potential duplicates gracefully
+        db_user = result.scalars().first()
+        
+        if db_user and db_user.autodesk_id:
+            print(f"DEBUG: Found Autodesk ID in DB for {email}")
+            return {"provider": "autodesk"}
+        
+        # Check Firebase
+        try:
+            fb_user = auth.get_user_by_email(email)
+            print(f"DEBUG: Firebase user found: {fb_user.uid}")
+            
+            providers = [p.provider_id for p in fb_user.provider_data]
+            print(f"DEBUG: Firebase providers: {providers}")
+            
+            if 'google.com' in providers:
+                print(f"DEBUG: Returning 'google' for {email}")
+                return {"provider": "google"}
+        except Exception as fb_err:
+            print(f"DEBUG: Firebase get_user error: {fb_err}")
+            
+    except Exception as e:
+        print(f"DEBUG: Global check-provider error: {e}")
+        
+    print(f"DEBUG: Defaulting to 'password' for {email}")
+    return {"provider": "password"}
 
 # --- Autodesk Auth Endpoints ---
 
@@ -540,6 +858,46 @@ async def import_autodesk_file(
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
+async def ensure_xrdock_folder(token: str, project_id: str, parent_folder_id: str) -> str:
+    """
+    Ensures a folder named 'XRDOCK' exists under parent_folder_id.
+    Returns the URN of the 'XRDOCK' folder.
+    """
+    print(f"DEBUG: Ensuring XRDOCK folder exists in parent {parent_folder_id}")
+    
+    # 1. Fetch parent metadata to see if it's already named XRDOCK
+    try:
+        parent_meta = await aps.get_item_details(token, project_id, parent_folder_id)
+        if parent_meta:
+            display_name = parent_meta.get("attributes", {}).get("displayName", "").strip()
+            print(f"DEBUG: Parent folder name is '{display_name}'")
+            if display_name.upper() == "XRDOCK":
+                print(f"DEBUG: Parent folder IS already XRDOCK. Returning parent ID.")
+                return parent_folder_id
+    except Exception as e:
+        print(f"DEBUG: Error getting parent metadata: {e}")
+
+    # 2. Search for XRDOCK child
+    contents = await aps.get_folder_contents(token, project_id, parent_folder_id)
+    for item in contents:
+        display_name = item.get("attributes", {}).get("displayName", "").strip()
+        item_type = item.get("type", "")
+        # Relax type check to match any string starting with "folders"
+        if item_type.startswith("folders") and display_name.upper() == "XRDOCK":
+            print(f"DEBUG: Found existing XRDOCK child folder: {item['id']}")
+            return item["id"]
+    
+    # 3. Create it if not found
+    print(f"DEBUG: XRDOCK folder not found in contents. Creating new one.")
+    new_folder_id = await aps.create_folder(
+        access_token=token,
+        project_id=project_id,
+        parent_folder_id=parent_folder_id,
+        folder_name="XRDOCK"
+    )
+    print(f"DEBUG: Created new XRDOCK folder: {new_folder_id}")
+    return new_folder_id
+
 @app.post("/autodesk/upload")
 async def autodesk_upload(
     project_id: str = Form(...),
@@ -558,12 +916,15 @@ async def autodesk_upload(
     # Ensure token is valid
     token_to_use = await ensure_valid_autodesk_token(db_user, session)
 
+    # Ensure organization folder
+    effective_folder_id = await ensure_xrdock_folder(token_to_use, project_id, folder_id)
+
     file_content = await file.read()
     try:
         result = await aps.upload_to_folder(
             access_token=token_to_use,
             project_id=project_id,
-            folder_id=folder_id,
+            folder_id=effective_folder_id,
             file_name=file.filename,
             file_content=file_content
         )
@@ -588,7 +949,10 @@ async def autodesk_create_folder_structure(
 
     token_to_use = await ensure_valid_autodesk_token(db_user, session)
 
-    folder_map = {"": request.base_folder_id}
+    # Ensure organization folder
+    base_id = await ensure_xrdock_folder(token_to_use, request.project_id, request.base_folder_id)
+
+    folder_map = {"": base_id}
     folder_contents_cache = {}
     
     # Sort paths by length so we create parents before children
@@ -660,6 +1024,9 @@ async def autodesk_upload_local_folder(
     if not os.path.exists(request.local_path) or not os.path.isdir(request.local_path):
         raise HTTPException(status_code=400, detail="Local folder path does not exist")
 
+    # Ensure organization folder
+    effective_base_folder_id = await ensure_xrdock_folder(token_to_use, request.project_id, request.folder_id)
+
     try:
         # Recursive upload function
         async def _upload_recursive(current_local_path, current_bim_folder_id):
@@ -725,12 +1092,22 @@ async def autodesk_upload_local_folder(
                     
         # We create a top-level folder in Autodesk with the name of the picked folder.
         top_folder_name = os.path.basename(os.path.normpath(request.local_path))
-        top_folder_id = await aps.create_folder(
-            access_token=token_to_use,
-            project_id=request.project_id,
-            parent_folder_id=request.folder_id,
-            folder_name=top_folder_name
-        )
+        
+        # Check if top-level folder already exists in XRDOCK
+        xrdock_contents = await aps.get_folder_contents(token_to_use, request.project_id, effective_base_folder_id)
+        top_folder_id = None
+        for item in xrdock_contents:
+            if item.get("type") == "folders" and item["attributes"]["displayName"] == top_folder_name:
+                top_folder_id = item["id"]
+                break
+        
+        if not top_folder_id:
+            top_folder_id = await aps.create_folder(
+                access_token=token_to_use,
+                project_id=request.project_id,
+                parent_folder_id=effective_base_folder_id,
+                folder_name=top_folder_name
+            )
         
         await _upload_recursive(request.local_path, top_folder_id)
 
@@ -1165,11 +1542,14 @@ async def upload_local_project(
 
     if user.autodesk_access_token and target_project_id and target_parent_id:
         try:
-            # 1a. Ensure the project subfolder exists within the destination folder
+            # 1a. Ensure organization folder
+            effective_parent_id = await ensure_xrdock_folder(user.autodesk_access_token, target_project_id, target_parent_id)
+
+            # 1b. Ensure the project subfolder exists within XRDOCK
             target_folder_id = await aps.create_folder(
                 access_token=user.autodesk_access_token,
                 project_id=target_project_id,
-                parent_folder_id=target_parent_id,
+                parent_folder_id=effective_parent_id,
                 folder_name=request.name
             )
             
@@ -1211,7 +1591,7 @@ async def upload_local_project(
                             print(f"Updating existing file in BIM: {item_name}")
                             await aps.update_file_version(
                                 access_token=user.autodesk_access_token,
-                                project_id=user.bim_upload_project_id,
+                                project_id=target_project_id,
                                 item_id=existing_items[item_name],
                                 file_name=item_name,
                                 file_content=file_bytes
@@ -1220,7 +1600,7 @@ async def upload_local_project(
                             print(f"Uploading new file to BIM: {item_name}")
                             await aps.upload_to_folder(
                                 access_token=user.autodesk_access_token,
-                                project_id=user.bim_upload_project_id,
+                                project_id=target_project_id,
                                 folder_id=current_bim_folder_id,
                                 file_name=item_name,
                                 file_content=file_bytes
@@ -1232,7 +1612,7 @@ async def upload_local_project(
                             # Create the subfolder in BIM
                             subfolder_id = await aps.create_folder(
                                 access_token=user.autodesk_access_token,
-                                project_id=user.bim_upload_project_id,
+                                project_id=target_project_id,
                                 parent_folder_id=current_bim_folder_id,
                                 folder_name=item_name
                             )
@@ -1491,12 +1871,20 @@ async def update_user_admin(
 async def delete_user(
     user_id: int,
     session: AsyncSession = Depends(get_session),
-    user: dict = Depends(verify_firebase_token)
+    admin: User = Depends(verify_admin_token)
 ):
-    # In a real app, verify `user` is an admin
     db_user = await session.get(User, user_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Also delete from Firebase to keep in sync
+    try:
+        auth.delete_user(db_user.uid)
+        print(f"User {db_user.uid} deleted from Firebase.")
+    except Exception as e:
+        print(f"Error deleting user from Firebase: {e}")
+        # We continue even if Firebase fails (e.g. user already deleted there) 
+        # or we could raise an error depending on desired strictness.
     
     await session.delete(db_user)
     await session.commit()

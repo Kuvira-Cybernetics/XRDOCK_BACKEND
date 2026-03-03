@@ -68,6 +68,9 @@ class UserUpdate(SQLModel):
     bim_upload_project_name: Optional[str] = None
     bim_upload_folder_id: Optional[str] = None
     bim_upload_folder_name: Optional[str] = None
+    is_admin: Optional[bool] = None
+    subscription_plan: Optional[str] = None
+    subscription_expiry: Optional[datetime] = None
 
 class ProjectCreate(SQLModel):
     name: str
@@ -155,6 +158,24 @@ class Issue(SQLModel, table=True):
     x_coord: Optional[float] = None
     y_coord: Optional[float] = None
     z_coord: Optional[float] = None
+
+class DocumentationTopic(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    parent_id: Optional[int] = Field(default=None, sa_column=Column(Integer, ForeignKey("documentationtopic.id", ondelete="CASCADE"), index=True))
+    title: str
+    icon_name: str = Field(default="description_outlined")
+    order_index: int = Field(default=0)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), sa_column=Column(DateTime(timezone=True)))
+
+class DocumentationSection(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    topic_id: int = Field(sa_column=Column(Integer, ForeignKey("documentationtopic.id", ondelete="CASCADE"), index=True))
+    type: str = Field(default="text") # heading, text, video, image, video_gallery, image_gallery
+    title: Optional[str] = None
+    content_text: Optional[str] = None
+    media_url: Optional[str] = None
+    media_list: Optional[str] = None # JSON string for galleries [{"url": "...", "title": "...", "thumbnail": "..."}]
+    order_index: int = Field(default=0)
 
 class PKCEState(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -5,7 +5,6 @@ import '../common/common.dart';
 import '../widgets/issue_list_panel.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:file_picker/file_picker.dart';
 import '../widgets/autodesk_file_browser.dart';
 
 import 'dart:html' as html;
@@ -95,9 +94,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final userData = json.decode(response.body);
 
         // Sync user details to global state
+        CommonData.dbUser = DBUser.fromJson(userData);
         CommonData.currentUserName = userData['name'];
         CommonData.currentUserEmail = userData['email'];
-        CommonData.currentUserId = userData['uid'];
+        CommonData.currentUserId = userData['uid'] ?? userData['id'];
         CommonData.isAutodeskUser =
             userData.containsKey('autodesk_id') &&
             userData['autodesk_id'] != null;
@@ -280,375 +280,150 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Helper for tracking upload progress
-  void _updateTransferStatus(
-    bool active, {
-    double progress = 0.0,
-    String message = '',
-  }) {
-    if (!mounted) return;
-    setState(() {
-      _isTransferring = active;
-      _overallProgress = progress;
-      _transferMessage = message;
-    });
-  }
-
-  Future<void> _uploadAutodeskFile() async {
-    String? localPath;
+  Future<void> _downloadLogo() async {
     if (!kIsWeb) {
-      try {
-        localPath = await FilePicker.platform.getDirectoryPath(
-          dialogTitle: 'Select Folder to Upload',
-        );
-      } catch (e) {
-        if (mounted)
-          CommonData.showCustomSnackBar(
-            context,
-            'Error picking folder: $e',
-            isError: true,
-          );
-        return;
-      }
-    } else {
-      try {
-        final uploadInput = html.FileUploadInputElement();
-        uploadInput.setAttribute('webkitdirectory', '');
-        uploadInput.setAttribute('directory', '');
-        uploadInput.multiple = true;
-
-        uploadInput.click();
-
-        await uploadInput.onChange.first;
-        final files = uploadInput.files;
-        if (files == null || files.isEmpty) return;
-
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Select Autodesk Destination'),
-              content: SizedBox(
-                width: 600,
-                height: 500,
-                child: AutodeskFileBrowser(
-                  allowFolderSelection: true,
-                  onFolderSelected:
-                      (
-                        hubId,
-                        hubName,
-                        projectId,
-                        projectName,
-                        folderId,
-                        folderName,
-                      ) async {
-                        Navigator.pop(ctx);
-                        await _performWebAutodeskFolderUpload(
-                          files,
-                          projectId,
-                          folderId,
-                        );
-                      },
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('CANCEL'),
-                ),
-              ],
-            ),
-          );
-        }
-        return; // Early return for web flow
-      } catch (e) {
-        if (mounted) {
-          CommonData.showCustomSnackBar(
-            context,
-            'Error picking folder: $e',
-            isError: true,
-          );
-        }
-        return;
-      }
+      CommonData.showCustomSnackBar(
+        context,
+        'Download is only supported on Web currently',
+        isError: true,
+      );
+      return;
     }
 
-    if (localPath == null || localPath.isEmpty) return;
-
-    // Now ask for the target Autodesk folder
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Select Autodesk Destination'),
-        content: SizedBox(
-          width: 600,
-          height: 500,
-          child: AutodeskFileBrowser(
-            allowFolderSelection: true,
-            onFolderSelected:
-                (
-                  hubId,
-                  hubName,
-                  projectId,
-                  projectName,
-                  folderId,
-                  folderName,
-                ) async {
-                  Navigator.pop(ctx);
-                  await _performAutodeskFolderUpload(
-                    localPath!,
-                    projectId,
-                    folderId,
-                  );
-                },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _performAutodeskFolderUpload(
-    String localPath,
-    String projectId,
-    String folderId,
-  ) async {
-    setState(() {
-      _isLoadingProjects = true;
-    });
-
+    // 1. Fetch available versions
+    setState(() => _isLoadingProjects = true);
     try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final body = {
-        'local_path': localPath,
-        'project_id': projectId,
-        'folder_id': folderId,
-      };
-
-      final response = await http.post(
-        Uri.parse('${CommonData.backendUrl}/autodesk/upload_local_folder'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
+      final response = await http.get(
+        Uri.parse('${CommonData.backendUrl}/list_app_versions'),
       );
 
       if (response.statusCode == 200) {
+        final List<dynamic> versions = json.decode(response.body)['versions'];
+        if (versions.isEmpty) {
+          if (mounted) {
+            CommonData.showCustomSnackBar(
+              context,
+              'No downloadable versions found',
+              isError: true,
+            );
+          }
+          return;
+        }
+
         if (mounted) {
-          CommonData.showCustomSnackBar(
-            context,
-            'Successfully uploaded folder to Autodesk Cloud',
-          );
+          _showVersionSelectionDialog(versions);
         }
       } else {
         if (mounted) {
           CommonData.showCustomSnackBar(
             context,
-            'Upload failed: ${response.body}',
+            'Failed to fetch versions: ${response.statusCode}',
             isError: true,
           );
         }
       }
     } catch (e) {
-      debugPrint('Error uploading to Autodesk: $e');
+      debugPrint('Error fetching versions: $e');
       if (mounted) {
         CommonData.showCustomSnackBar(
           context,
-          'An error occurred during upload',
+          'An error occurred fetching versions',
           isError: true,
         );
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoadingProjects = false;
-        });
+        setState(() => _isLoadingProjects = false);
       }
     }
   }
 
-  Future<void> _performWebAutodeskFolderUpload(
-    List<html.File> files,
-    String projectId,
-    String baseFolderId,
-  ) async {
-    setState(() {
-      _isLoadingProjects = true;
-    });
+  void _showVersionSelectionDialog(List<dynamic> versions) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        bool isDark = Theme.of(context).brightness == Brightness.dark;
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E2328) : Colors.white,
+          title: const Text('Download XR-DOCK'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select a version to download:',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: versions.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final v = versions[index];
+                      final filename = v['filename'] as String;
+                      final size = _formatFileSize(v['size'] as int);
 
-    try {
-      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (token == null) return;
-
-      if (mounted) {
-        _updateTransferStatus(
-          true,
-          progress: 0.05,
-          message: 'Creating folder structure...',
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.archive_outlined),
+                        title: Text(
+                          filename,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(size),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.download),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _triggerImmediateDownload(filename);
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _triggerImmediateDownload(filename);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCEL'),
+            ),
+          ],
         );
-        CommonData.showCustomSnackBar(
-          context,
-          'Creating folder structure...',
-          isInfo: true,
-        );
-      }
+      },
+    );
+  }
 
-      // 1. Gather relative paths
-      final Set<String> paths = {};
-      for (final file in files) {
-        String path = file.relativePath ?? '';
-        if (path.isEmpty || path == 'null') {
-          try {
-            path = (file as dynamic).webkitRelativePath?.toString() ?? '';
-          } catch (_) {}
-        }
-        if (path.isNotEmpty) {
-          final parts = path.split('/');
-          if (parts.length > 1) {
-            final dirPath = parts.sublist(0, parts.length - 1).join('/');
-            paths.add(dirPath);
-          }
-        }
-      }
+  void _triggerImmediateDownload(String filename) {
+    final url =
+        '${CommonData.backendUrl}/download_app?filename=${Uri.encodeComponent(filename)}';
 
-      // 2. Ask backend to bulk create folders
-      final structureBody = {
-        'project_id': projectId,
-        'base_folder_id': baseFolderId,
-        'paths': paths.toList(),
-      };
+    // Trigger standard browser download immediately
+    html.AnchorElement(href: url)
+      ..setAttribute("download", filename)
+      ..click();
 
-      final structureResponse = await http.post(
-        Uri.parse('${CommonData.backendUrl}/autodesk/create_folder_structure'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(structureBody),
-      );
-
-      if (structureResponse.statusCode != 200) {
-        if (mounted) {
-          CommonData.showCustomSnackBar(
-            context,
-            'Failed to create folder structure: ${structureResponse.body}',
-            isError: true,
-          );
-        }
-        return;
-      }
-
-      final folderMap =
-          json.decode(structureResponse.body)['folder_map']
-              as Map<String, dynamic>;
-
-      if (mounted) {
-        _updateTransferStatus(
-          true,
-          progress: 0.1,
-          message: 'Uploading ${files.length} files...',
-        );
-        CommonData.showCustomSnackBar(
-          context,
-          'Uploading ${files.length} files...',
-          isInfo: true,
-        );
-      }
-
-      // 3. Upload files individually
-      int successCount = 0;
-      int failCount = 0;
-
-      for (int i = 0; i < files.length; i++) {
-        final file = files[i];
-        String path = file.relativePath ?? '';
-        if (path.isEmpty || path == 'null') {
-          try {
-            path = (file as dynamic).webkitRelativePath?.toString() ?? '';
-          } catch (_) {}
-        }
-
-        String targetFolderId = baseFolderId;
-        if (path.isNotEmpty) {
-          final parts = path.split('/');
-          if (parts.length > 1) {
-            final dirPath = parts.sublist(0, parts.length - 1).join('/');
-            targetFolderId = folderMap[dirPath] ?? baseFolderId;
-          }
-        }
-
-        final request = http.MultipartRequest(
-          'POST',
-          Uri.parse('${CommonData.backendUrl}/autodesk/upload'),
-        );
-        request.headers['Authorization'] = 'Bearer $token';
-        request.fields['project_id'] = projectId;
-        request.fields['folder_id'] = targetFolderId;
-
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        await reader.onLoad.first;
-        final bytes = reader.result as Uint8List;
-
-        request.files.add(
-          http.MultipartFile.fromBytes('file', bytes, filename: file.name),
-        );
-
-        final response = await request.send();
-        if (response.statusCode == 200) {
-          successCount++;
-        } else {
-          failCount++;
-          debugPrint('Failed to upload ${file.name}: ${response.statusCode}');
-        }
-
-        if (mounted) {
-          _updateTransferStatus(
-            true,
-            progress: 0.1 + (0.9 * (i + 1) / files.length),
-            message: 'Uploaded ${i + 1}/${files.length} files...',
-          );
-        }
-      }
-
-      if (mounted) {
-        if (failCount == 0) {
-          CommonData.showCustomSnackBar(
-            context,
-            'Successfully uploaded folder with $successCount files to Autodesk Cloud',
-          );
-        } else {
-          CommonData.showCustomSnackBar(
-            context,
-            'Uploaded $successCount files, but $failCount failed',
-            isError: true,
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error uploading to Autodesk via web: $e');
-      if (mounted) {
-        CommonData.showCustomSnackBar(
-          context,
-          'An error occurred during web upload',
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingProjects = false;
-          _isTransferring = false;
-          _overallProgress = 0.0;
-        });
-      }
+    if (mounted) {
+      CommonData.showCustomSnackBar(context, 'Download Started');
     }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
   void _openProject(Map<String, dynamic> project) {
@@ -1152,22 +927,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const Spacer(),
 
-                if (CommonData.isAutodeskUser && _galleryTab == 1) ...[
-                  ElevatedButton.icon(
-                    onPressed: _uploadAutodeskFile,
-                    icon: const Icon(Icons.cloud_upload_outlined),
-                    label: const Text('UPLOAD TO AUTODESK'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
+                // Logo Download Button (Image based)
+                InkWell(
+                  onTap: _downloadLogo,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).primaryColor.withOpacity(0.2),
                       ),
                     ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/images/logo.png',
+                          height: 28,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.download_for_offline_outlined,
+                          size: 20,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 16),
-                ],
+                ),
+
+                const SizedBox(width: 16),
               ],
             ),
           ),

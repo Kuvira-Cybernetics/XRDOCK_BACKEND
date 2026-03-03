@@ -12,6 +12,8 @@ import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/admin_screen.dart';
 import 'screens/admin_users_screen.dart';
+import 'screens/admin_docs_screen.dart';
+import 'screens/help_support_screen.dart';
 import 'common/common.dart';
 import 'widgets/main_layout.dart';
 
@@ -70,8 +72,28 @@ class XRDockApp extends StatelessWidget {
         return MaterialApp(
           title: 'XR-DOCK',
           debugShowCheckedModeBanner: false,
-          theme: XRDockTheme.lightTheme,
-          darkTheme: XRDockTheme.darkTheme,
+          theme: XRDockTheme.lightTheme.copyWith(
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: NoTransitionsBuilder(),
+                TargetPlatform.iOS: NoTransitionsBuilder(),
+                TargetPlatform.windows: NoTransitionsBuilder(),
+                TargetPlatform.macOS: NoTransitionsBuilder(),
+                TargetPlatform.linux: NoTransitionsBuilder(),
+              },
+            ),
+          ),
+          darkTheme: XRDockTheme.darkTheme.copyWith(
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: NoTransitionsBuilder(),
+                TargetPlatform.iOS: NoTransitionsBuilder(),
+                TargetPlatform.windows: NoTransitionsBuilder(),
+                TargetPlatform.macOS: NoTransitionsBuilder(),
+                TargetPlatform.linux: NoTransitionsBuilder(),
+              },
+            ),
+          ),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
           initialRoute: '/',
           routes: {
@@ -101,6 +123,14 @@ class XRDockApp extends StatelessWidget {
             ),
             '/admin': (context) =>
                 const MainLayout(currentRoute: '/admin', child: AdminScreen()),
+            '/admin/docs': (context) => const MainLayout(
+              currentRoute: '/admin/docs',
+              child: AdminDocsScreen(),
+            ),
+            '/support': (context) => const MainLayout(
+              currentRoute: '/support',
+              child: HelpSupportScreen(),
+            ),
           },
           onGenerateRoute: (settings) {
             final name = settings.name ?? '';

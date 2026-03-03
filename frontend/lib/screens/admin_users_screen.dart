@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../common/common.dart';
 import '../theme/xrdock_theme.dart';
 
@@ -72,6 +73,64 @@ class _UsersScreenState extends State<UsersScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => _UserDetailSheet(user: user, onUpdate: _fetchUsers),
     );
+  }
+
+  Future<void> _handleDeleteUser(dynamic user) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete User',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to delete ${user['name']}? This action will also remove them from Firebase and cannot be undone.',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'CANCEL',
+              style: GoogleFonts.poppins(color: Colors.grey),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              'DELETE',
+              style: GoogleFonts.poppins(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isLoading = true);
+      try {
+        final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+        final response = await http.delete(
+          Uri.parse('${CommonData.backendUrl}/users/${user['id']}'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+
+        if (response.statusCode == 200) {
+          CommonData.showCustomSnackBar(context, 'User deleted successfully');
+          _fetchUsers();
+        } else {
+          CommonData.showCustomSnackBar(context, 'Failed to delete user');
+        }
+      } catch (e) {
+        debugPrint('Error deleting user: $e');
+        CommonData.showCustomSnackBar(context, 'Error deleting user');
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -164,53 +223,79 @@ class _UsersScreenState extends State<UsersScreen> {
         borderRadius: BorderRadius.circular(16),
         child: SingleChildScrollView(
           scrollDirection: Axis.vertical,
-          child: DataTable(
-            showCheckboxColumn: false,
-            headingRowColor: MaterialStateProperty.all(
-              isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.grey.withOpacity(0.05),
+          child: SizedBox(
+            width: double.infinity,
+            child: DataTable(
+              showCheckboxColumn: false,
+              headingRowColor: MaterialStateProperty.all(
+                isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.grey.withOpacity(0.05),
+              ),
+              columns: [
+                DataColumn(label: _buildColumnLabel('NAME')),
+                DataColumn(label: _buildColumnLabel('EMAIL')),
+                DataColumn(label: _buildColumnLabel('COMPANY')),
+                DataColumn(label: _buildColumnLabel('ROLE')),
+                DataColumn(label: _buildColumnLabel('ADMIN')),
+                DataColumn(label: _buildColumnLabel('ACTIONS')),
+              ],
+              rows: _filteredUsers.map((user) {
+                return DataRow(
+                  onSelectChanged: (_) => _showUserDetail(user),
+                  cells: [
+                    DataCell(
+                      Text(user['name'] ?? 'N/A', style: GoogleFonts.poppins()),
+                    ),
+                    DataCell(
+                      Text(
+                        user['email'] ?? 'N/A',
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        user['company_name'] ?? 'N/A',
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
+                    DataCell(
+                      Text(
+                        user['job_title'] ?? 'N/A',
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
+                    DataCell(
+                      Icon(
+                        user['is_admin'] == true
+                            ? Icons.check_circle_rounded
+                            : Icons.cancel_outlined,
+                        color: user['is_admin'] == true
+                            ? Colors.green
+                            : Colors.grey,
+                        size: 20,
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: Colors.redAccent,
+                            ),
+                            onPressed: () => _handleDeleteUser(user),
+                            tooltip: 'Delete User',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
             ),
-            columns: [
-              DataColumn(label: _buildColumnLabel('NAME')),
-              DataColumn(label: _buildColumnLabel('EMAIL')),
-              DataColumn(label: _buildColumnLabel('COMPANY')),
-              DataColumn(label: _buildColumnLabel('ROLE')),
-              DataColumn(label: _buildColumnLabel('ADMIN')),
-            ],
-            rows: _filteredUsers.map((user) {
-              return DataRow(
-                onSelectChanged: (_) => _showUserDetail(user),
-                cells: [
-                  DataCell(
-                    Text(user['name'] ?? 'N/A', style: GoogleFonts.exo2()),
-                  ),
-                  DataCell(
-                    Text(user['email'] ?? 'N/A', style: GoogleFonts.exo2()),
-                  ),
-                  DataCell(
-                    Text(
-                      user['company_name'] ?? 'N/A',
-                      style: GoogleFonts.exo2(),
-                    ),
-                  ),
-                  DataCell(
-                    Text(user['job_title'] ?? 'N/A', style: GoogleFonts.exo2()),
-                  ),
-                  DataCell(
-                    Icon(
-                      user['is_admin'] == true
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_outlined,
-                      color: user['is_admin'] == true
-                          ? Colors.green
-                          : Colors.grey,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
           ),
         ),
       ),
@@ -244,7 +329,10 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
   late TextEditingController _companyController;
   late TextEditingController _roleController;
   late bool _isAdmin;
+  String? _subscriptionPlan;
+  DateTime? _subscriptionExpiry;
   bool _isSaving = false;
+  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   @override
   void initState() {
@@ -255,6 +343,24 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
     );
     _roleController = TextEditingController(text: widget.user['job_title']);
     _isAdmin = widget.user['is_admin'] == true;
+    _subscriptionPlan = widget.user['subscription_plan'];
+    if (widget.user['subscription_expiry'] != null) {
+      _subscriptionExpiry = DateTime.parse(widget.user['subscription_expiry']);
+    }
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _subscriptionExpiry ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null && picked != _subscriptionExpiry) {
+      setState(() {
+        _subscriptionExpiry = picked;
+      });
+    }
   }
 
   Future<void> _saveChanges() async {
@@ -272,6 +378,8 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
           'company_name': _companyController.text,
           'job_title': _roleController.text,
           'is_admin': _isAdmin,
+          'subscription_plan': _subscriptionPlan,
+          'subscription_expiry': _subscriptionExpiry?.toIso8601String(),
         }),
       );
 
@@ -339,6 +447,58 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
             onChanged: (val) => setState(() => _isAdmin = val),
             activeColor: XRDockTheme.primaryPurple,
           ),
+          const SizedBox(height: 16),
+
+          // Subscription Plan
+          _buildDropdown(
+            'SUBSCRIPTION PLAN',
+            _subscriptionPlan,
+            ['basic', 'pro', 'enterprise'],
+            (val) => setState(() => _subscriptionPlan = val),
+          ),
+          const SizedBox(height: 16),
+
+          // Expiry Date
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SUBSCRIPTION EXPIRY',
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => _selectDate(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_outlined, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        _subscriptionExpiry == null
+                            ? 'Select Date'
+                            : _dateFormat.format(_subscriptionExpiry!),
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -355,7 +515,7 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
                   ? const CircularProgressIndicator(color: Colors.white)
                   : Text(
                       'SAVE CHANGES',
-                      style: GoogleFonts.orbitron(fontWeight: FontWeight.bold),
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                     ),
             ),
           ),
@@ -391,6 +551,54 @@ class _UserDetailSheetState extends State<_UserDetailSheet> {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown(
+    String label,
+    String? value,
+    List<String> options,
+    Function(String?) onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              hint: Text('Select Plan', style: GoogleFonts.poppins()),
+              items: options
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: p,
+                      child: Text(
+                        p.toUpperCase(),
+                        style: GoogleFonts.poppins(),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onChanged,
             ),
           ),
         ),

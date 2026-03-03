@@ -187,7 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const Spacer(),
                         Text(
                           'Join XRDOCK\nTransform your Workflow',
-                          style: GoogleFonts.orbitron(
+                          style: GoogleFonts.poppins(
                             fontSize: 40,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -197,7 +197,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 24),
                         Text(
                           'Manage XR projects, local data, and issues in one integrated environment.',
-                          style: GoogleFonts.exo2(
+                          style: GoogleFonts.poppins(
                             fontSize: 18,
                             color: Colors.white70,
                           ),
@@ -341,7 +341,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       onPressed: () => Navigator.pop(context),
                                       child: Text(
                                         'ALREADY HAVE AN ACCOUNT? LOG IN',
-                                        style: GoogleFonts.exo2(
+                                        style: GoogleFonts.poppins(
                                           color: XRDockTheme.secondaryPurple,
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
@@ -466,11 +466,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _buildField(_employeeCountController, 'EMPLOYEES', '50-200'),
         ]),
         const SizedBox(height: 24),
+        Text(
+          'COUNTRY',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: _countryController.text.isEmpty
               ? null
               : _countryController.text,
-          decoration: const InputDecoration(labelText: 'COUNTRY'),
+          decoration: const InputDecoration(),
           items: [
             'United States',
             'India',
@@ -541,16 +550,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     TextInputType type = TextInputType.text,
     String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: type,
-      decoration: InputDecoration(labelText: label, hintText: hint),
-      validator:
-          validator ??
-          (v) => (v == null || v.isEmpty) && label != 'LINKEDIN URL (OPTIONAL)'
-              ? 'Required'
-              : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: obscure,
+          keyboardType: type,
+          decoration: InputDecoration(hintText: hint),
+          validator:
+              validator ??
+              (v) =>
+                  (v == null || v.isEmpty) && label != 'LINKEDIN URL (OPTIONAL)'
+                  ? 'Required'
+                  : null,
+        ),
+      ],
     );
   }
 }

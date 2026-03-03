@@ -68,6 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) {
           setState(() {
             _backendUser = json.decode(response.body);
+            CommonData.dbUser = DBUser.fromJson(_backendUser!);
             // Pre-fill controllers
             _nameController.text =
                 _backendUser?['name'] ??
@@ -453,7 +454,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   )
                 : Text(
                     'SAVE CHANGES',
-                    style: GoogleFonts.orbitron(fontWeight: FontWeight.bold),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
                   ),
           ),
         ],

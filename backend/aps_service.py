@@ -158,6 +158,28 @@ class APSService:
             create_resp.raise_for_status()
             return create_resp.json()["data"]["id"]
 
+    async def get_item_details(self, access_token: str, project_id: str, item_id: str) -> Dict[str, Any]:
+        """Gets metadata for a specific item (file or folder)."""
+        import urllib.parse
+        safe_project_id = urllib.parse.quote(project_id)
+        safe_item_id = urllib.parse.quote(item_id, safe='')
+        
+        # Try as folder first
+        url = f"{self.base_url}/data/v1/projects/{safe_project_id}/folders/{safe_item_id}"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json().get("data", {})
+                
+            # Try as item (file)
+            url = f"{self.base_url}/data/v1/projects/{safe_project_id}/items/{safe_item_id}"
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json().get("data", {})
+                
+        return {}
+
     async def get_item_tip_version(self, access_token: str, project_id: str, item_id: str) -> str:
         """Returns the URN of the latest version (tip) of an item."""
         import urllib.parse

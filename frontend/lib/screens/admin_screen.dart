@@ -114,17 +114,25 @@ class _AdminScreenState extends State<AdminScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              _buildFieldLabel('NAME'),
+              const SizedBox(height: 8),
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: const InputDecoration(),
               ),
+              const SizedBox(height: 16),
+              _buildFieldLabel('COMPANY'),
+              const SizedBox(height: 8),
               TextField(
                 controller: companyCtrl,
-                decoration: const InputDecoration(labelText: 'Company'),
+                decoration: const InputDecoration(),
               ),
+              const SizedBox(height: 16),
+              _buildFieldLabel('JOB TITLE'),
+              const SizedBox(height: 8),
               TextField(
                 controller: roleCtrl,
-                decoration: const InputDecoration(labelText: 'Job Title'),
+                decoration: const InputDecoration(),
               ),
             ],
           ),
@@ -175,9 +183,11 @@ class _AdminScreenState extends State<AdminScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              _buildFieldLabel('NAME'),
+              const SizedBox(height: 8),
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: const InputDecoration(),
               ),
             ],
           ),
@@ -229,14 +239,17 @@ class _AdminScreenState extends State<AdminScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _buildFieldLabel('TITLE'),
+                const SizedBox(height: 8),
                 TextField(
                   controller: titleCtrl,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: const InputDecoration(),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                _buildFieldLabel('STATUS'),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: currentStatus,
-                  decoration: const InputDecoration(labelText: 'Status'),
                   items: const [
                     DropdownMenuItem(value: 'open', child: Text('Open')),
                     DropdownMenuItem(
@@ -248,10 +261,11 @@ class _AdminScreenState extends State<AdminScreen>
                   onChanged: (val) =>
                       setStateDialog(() => currentStatus = val!),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                _buildFieldLabel('PRIORITY'),
+                const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: currentPriority,
-                  decoration: const InputDecoration(labelText: 'Priority'),
                   items: const [
                     DropdownMenuItem(value: 'urgent', child: Text('Urgent')),
                     DropdownMenuItem(value: 'high', child: Text('High')),
@@ -380,7 +394,8 @@ class _AdminScreenState extends State<AdminScreen>
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteRecord('projects', proj['id']),
+                          onPressed: () =>
+                              _deleteRecord('projects', proj['id']),
                         ),
                       ],
                     ),
@@ -414,7 +429,9 @@ class _AdminScreenState extends State<AdminScreen>
                 cells: [
                   DataCell(Text(issue['id'].toString())),
                   DataCell(Text(issue['title']?.toString() ?? '')),
-                  DataCell(Text(issue['status']?.toString().toUpperCase() ?? '')),
+                  DataCell(
+                    Text(issue['status']?.toString().toUpperCase() ?? ''),
+                  ),
                   DataCell(
                     Text(issue['priority']?.toString().toUpperCase() ?? ''),
                   ),
@@ -517,4 +534,19 @@ class _DataSource extends DataTableSource {
 
   @override
   int get selectedRowCount => 0;
+}
+
+Widget _buildFieldLabel(String label) {
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: Text(
+      label,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        color: Colors.grey,
+        letterSpacing: 1.1,
+      ),
+    ),
+  );
 }

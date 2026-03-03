@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
 import '../theme/xrdock_theme.dart';
@@ -21,7 +23,40 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  bool _isCollapsed = false;
+  // Static so it persists across route changes (pushReplacementNamed rebuilds the widget).
+  static bool _isCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureUserHydrated();
+  }
+
+  Future<void> _ensureUserHydrated() async {
+    if (CommonData.dbUser != null) return;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final token = await user.getIdToken();
+      final response = await http.get(
+        Uri.parse('${CommonData.backendUrl}/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final userData = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            CommonData.dbUser = DBUser.fromJson(userData);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('MAIN_LAYOUT: Error hydrating user: $e');
+    }
+  }
 
   void _onLogout() async {
     final bool? confirm = await showDialog<bool>(
@@ -57,7 +92,6 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dbUser = CommonData.dbUser;
 
     return Scaffold(
       body: Row(
@@ -118,108 +152,149 @@ class _MainLayoutState extends State<MainLayout> {
 
                     // Menu Items
                     Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        children: [
-                          _SidebarItem(
-                            icon: Icons.dashboard_outlined,
-                            label: 'PROJECTS',
-                            isSelected: widget.currentRoute == '/dashboard',
-                            onTap: () => Navigator.pushReplacementNamed(
-                              context,
-                              '/dashboard',
-                            ),
-                            isCollapsed: _isCollapsed,
-                          ),
-                          _SidebarItem(
-                            icon: Icons.bug_report_outlined,
-                            label: 'ISSUES',
-                            isSelected: widget.currentRoute == '/issues',
-                            onTap: () => Navigator.pushReplacementNamed(
-                              context,
-                              '/issues',
-                            ),
-                            isCollapsed: _isCollapsed,
-                          ),
-                          // Conditional Admin Module
-                          if (dbUser?.is_admin == true)
-                            _SidebarItem(
-                              icon: Icons.people_outline,
-                              label: 'USERS',
-                              isSelected: widget.currentRoute == '/admin/users',
-                              onTap: () => Navigator.pushReplacementNamed(
-                                context,
-                                '/admin/users',
+                      child: ValueListenableBuilder<DBUser?>(
+                        valueListenable: CommonData.userProfileNotifier,
+                        builder: (context, dbUser, _) {
+                          return ListView(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            children: [
+                              _SidebarItem(
+                                icon: Icons.dashboard_outlined,
+                                label: 'PROJECTS',
+                                isSelected: widget.currentRoute == '/dashboard',
+                                onTap: () => Navigator.pushReplacementNamed(
+                                  context,
+                                  '/dashboard',
+                                ),
+                                isCollapsed: _isCollapsed,
                               ),
-                              isCollapsed: _isCollapsed,
-                              isSpecial: true,
-                            ),
-                          _SidebarItem(
-                            icon: Icons.person_outline,
-                            label: 'PROFILE',
-                            isSelected: widget.currentRoute == '/profile',
-                            onTap: () => Navigator.pushReplacementNamed(
-                              context,
-                              '/profile',
-                            ),
-                            isCollapsed: _isCollapsed,
-                          ),
-                          _SidebarItem(
-                            icon: Icons.settings_outlined,
-                            label: 'SETTINGS',
-                            isSelected: widget.currentRoute == '/settings',
-                            onTap: () => Navigator.pushReplacementNamed(
-                              context,
-                              '/settings',
-                            ),
-                            isCollapsed: _isCollapsed,
-                          ),
-                        ],
+                              _SidebarItem(
+                                icon: Icons.bug_report_outlined,
+                                label: 'ISSUES',
+                                isSelected: widget.currentRoute == '/issues',
+                                onTap: () => Navigator.pushReplacementNamed(
+                                  context,
+                                  '/issues',
+                                ),
+                                isCollapsed: _isCollapsed,
+                              ),
+                              // Conditional Admin Modules
+                              if (dbUser?.is_admin == true) ...[
+                                _SidebarItem(
+                                  icon: Icons.people_outline,
+                                  label: 'USERS',
+                                  isSelected:
+                                      widget.currentRoute == '/admin/users',
+                                  onTap: () => Navigator.pushReplacementNamed(
+                                    context,
+                                    '/admin/users',
+                                  ),
+                                  isCollapsed: _isCollapsed,
+                                  isSpecial: true,
+                                ),
+                                _SidebarItem(
+                                  icon: Icons.edit_note_rounded,
+                                  label: 'DOCS MGMT',
+                                  isSelected:
+                                      widget.currentRoute == '/admin/docs',
+                                  onTap: () => Navigator.pushReplacementNamed(
+                                    context,
+                                    '/admin/docs',
+                                  ),
+                                  isCollapsed: _isCollapsed,
+                                  isSpecial: true,
+                                ),
+                              ],
+                              _SidebarItem(
+                                icon: Icons.person_outline,
+                                label: 'PROFILE',
+                                isSelected: widget.currentRoute == '/profile',
+                                onTap: () => Navigator.pushReplacementNamed(
+                                  context,
+                                  '/profile',
+                                ),
+                                isCollapsed: _isCollapsed,
+                              ),
+                              _SidebarItem(
+                                icon: Icons.settings_outlined,
+                                label: 'SETTINGS',
+                                isSelected: widget.currentRoute == '/settings',
+                                onTap: () => Navigator.pushReplacementNamed(
+                                  context,
+                                  '/settings',
+                                ),
+                                isCollapsed: _isCollapsed,
+                              ),
+                              _SidebarItem(
+                                icon: Icons.help_outline_rounded,
+                                label: 'HELP & SUPPORT',
+                                isSelected: widget.currentRoute == '/support',
+                                onTap: () => Navigator.pushReplacementNamed(
+                                  context,
+                                  '/support',
+                                ),
+                                isCollapsed: _isCollapsed,
+                                isSpecial: true,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
 
-                    // Bottom Actions
+                    // Bottom Actions: Responsive Icon Layout
                     Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          _SidebarItem(
-                            icon: isDark
-                                ? Icons.light_mode_outlined
-                                : Icons.dark_mode_outlined,
-                            label: isDark ? 'LIGHT MODE' : 'DARK MODE',
-                            isSelected: false,
-                            onTap: () {
-                              final currentMode =
-                                  CommonData.isDarkModeNotifier.value
-                                  ? ThemeMode.dark
-                                  : ThemeMode.light;
-                              CommonData.isDarkModeNotifier.value =
-                                  (currentMode == ThemeMode.light);
-                            },
-                            isCollapsed: _isCollapsed,
-                          ),
-                          _SidebarItem(
-                            icon: Icons.logout_rounded,
-                            label: 'LOGOUT',
-                            isSelected: false,
-                            onTap: _onLogout,
-                            isCollapsed: _isCollapsed,
-                          ),
-                          const SizedBox(height: 16),
-                          IconButton(
-                            onPressed: () =>
-                                setState(() => _isCollapsed = !_isCollapsed),
-                            icon: Icon(
-                              _isCollapsed
-                                  ? Icons.chevron_right_rounded
-                                  : Icons.chevron_left_rounded,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.05)
+                              : Colors.black.withOpacity(0.02),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: _isCollapsed
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildThemeIcon(isDark),
+                                  const SizedBox(height: 20),
+                                  _buildLogoutIcon(),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildThemeIcon(isDark),
+                                  Container(
+                                    width: 1,
+                                    height: 16,
+                                    color: Colors.grey.withOpacity(0.2),
+                                  ),
+                                  _buildLogoutIcon(),
+                                ],
+                              ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: IconButton(
+                        onPressed: () =>
+                            setState(() => _isCollapsed = !_isCollapsed),
+                        icon: Icon(
+                          _isCollapsed
+                              ? Icons.chevron_right_rounded
+                              : Icons.chevron_left_rounded,
+                          color: Colors.grey.withOpacity(0.5),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ],
@@ -237,6 +312,37 @@ class _MainLayoutState extends State<MainLayout> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildThemeIcon(bool isDark) {
+    return Tooltip(
+      message: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+      child: IconButton(
+        icon: Icon(
+          isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          size: 20,
+        ),
+        color: isDark ? Colors.amber : Colors.indigoAccent,
+        onPressed: () {
+          CommonData.isDarkModeNotifier.value = !isDark;
+        },
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  Widget _buildLogoutIcon() {
+    return IconButton(
+      icon: const Icon(Icons.logout_rounded, size: 18),
+      color: Colors.redAccent,
+      onPressed: _onLogout,
+      tooltip: 'LOGOUT',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -262,7 +368,7 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Padding(
+    final itemWidget = Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
         onTap: onTap,
@@ -316,5 +422,17 @@ class _SidebarItem extends StatelessWidget {
         ),
       ),
     );
+
+    // When the sidebar is collapsed, show a tooltip with the item label.
+    // When expanded, labels are visible so no tooltip is needed.
+    if (isCollapsed) {
+      return Tooltip(
+        message: label,
+        preferBelow: false,
+        verticalOffset: 8,
+        child: itemWidget,
+      );
+    }
+    return itemWidget;
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../common/common.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -482,38 +483,77 @@ class _ContactFormState extends State<_ContactForm> {
           Row(
             children: [
               Expanded(
-                child: TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'NAME',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Name required' : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'NAME',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: (v) => v!.isEmpty ? 'Name required' : null,
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 20),
               Expanded(
-                child: TextFormField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'WORK EMAIL',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Email required' : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'WORK EMAIL',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (v) => v!.isEmpty ? 'Email required' : null,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _messageController,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'TELL US ABOUT YOUR NEEDS',
-              hintText:
-                  'e.g. Number of seats, specific integrations required...',
-            ),
-            validator: (v) => v!.isEmpty ? 'Message required' : null,
+          const SizedBox(height: 24),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TELL US ABOUT YOUR NEEDS',
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _messageController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText:
+                      'e.g. Number of seats, specific integrations required...',
+                ),
+                validator: (v) => v!.isEmpty ? 'Message required' : null,
+              ),
+            ],
           ),
           const SizedBox(height: 32),
           SizedBox(
