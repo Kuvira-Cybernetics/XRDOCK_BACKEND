@@ -79,9 +79,21 @@ class _UsersScreenState extends State<UsersScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'Delete User',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Delete User',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(context, false),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
         ),
         content: Text(
           'Are you sure you want to delete ${user['name']}? This action will also remove them from Firebase and cannot be undone.',

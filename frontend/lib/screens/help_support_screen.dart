@@ -14,6 +14,9 @@ String _getYouTubeThumbnail(String url) {
     final id = _extractYouTubeId(url);
     if (id != null) return 'https://img.youtube.com/vi/$id/0.jpg';
   }
+  if (!url.startsWith('http')) {
+    return '${CommonData.backendUrl}$url';
+  }
   return url;
 }
 
@@ -42,6 +45,8 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   bool _isLoading = true;
   bool _isSearching = false;
   String? _error;
+  int? _activeSectionId;
+  bool _isAutoScrolling = false;
 
   // Track section keys for TOC jumping
   final Map<int, GlobalKey> _sectionKeys = {};
@@ -50,6 +55,47 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   void initState() {
     super.initState();
     _fetchDocumentation();
+    _contentScrollController.addListener(_onContentScroll);
+  }
+
+  void _onContentScroll() {
+    if (_sectionKeys.isEmpty || _isAutoScrolling) return;
+
+    int? newActiveId;
+    double minPositive = double.infinity;
+    double maxNegative = double.negativeInfinity;
+    int? maxNegativeId;
+
+    for (final entry in _sectionKeys.entries) {
+      final key = entry.value;
+      if (key.currentContext != null) {
+        final box = key.currentContext!.findRenderObject() as RenderBox?;
+        if (box != null) {
+          try {
+            final position = box.localToGlobal(Offset.zero).dy;
+            if (position > 0 && position < minPositive) {
+              minPositive = position;
+              if (position < 100) {
+                newActiveId = entry.key;
+              }
+            }
+            if (position <= 0 && position > maxNegative) {
+              maxNegative = position;
+              if (position.abs() < 100) {
+                newActiveId = entry.key;
+              }
+              maxNegativeId = entry.key;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    newActiveId ??= maxNegativeId;
+
+    if (newActiveId != null && _activeSectionId != newActiveId) {
+      setState(() => _activeSectionId = newActiveId);
+    }
   }
 
   @override
@@ -113,14 +159,29 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     }
   }
 
-  void _scrollToSection(int sectionId) {
+  void _scrollToSection(int sectionId) async {
     final key = _sectionKeys[sectionId];
     if (key != null && key.currentContext != null) {
-      Scrollable.ensureVisible(
-        key.currentContext!,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+      final box = key.currentContext!.findRenderObject() as RenderBox?;
+      if (box != null && _contentScrollController.hasClients) {
+        setState(() {
+          _activeSectionId = sectionId;
+          _isAutoScrolling = true;
+        });
+
+        final position = box.localToGlobal(Offset.zero).dy;
+        // Accounting for the 64px vertical padding and sticky header spacing
+        // We want to scroll by the distance from the top of the viewport to the element
+        final targetScrollOffset =
+            _contentScrollController.offset + position - 64;
+
+        await _contentScrollController.animateTo(
+          targetScrollOffset,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+        if (mounted) setState(() => _isAutoScrolling = false);
+      }
     }
   }
 
@@ -314,7 +375,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 (t) => t['id'] == result['topic_id'],
               );
               if (idx != -1) {
-                setState(() => _selectedTopicIndex = idx);
+                setState(() {
+                  _selectedTopicIndex = idx;
+                  _activeSectionId = result['id'];
+                });
                 // Wait for render then scroll
                 WidgetsBinding.instance.addPostFrameCallback(
                   (_) => _scrollToSection(result['id']),
@@ -376,8 +440,13 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }) {
     return InkWell(
       onTap: () {
-        setState(() => _selectedTopicIndex = _topics.indexOf(topic));
-        _contentScrollController.jumpTo(0);
+        setState(() {
+          _selectedTopicIndex = _topics.indexOf(topic);
+          _activeSectionId = null;
+        });
+        if (_contentScrollController.hasClients) {
+          _contentScrollController.jumpTo(0);
+        }
       },
       borderRadius: BorderRadius.circular(6),
       child: Container(
@@ -419,6 +488,21 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Widget _buildMainContent(dynamic topic, bool isDark) {
     final sections = topic['sections'] as List;
 
+    // Calculate visual linear order for Prev/Next navigation
+    final List<dynamic> visualTopics = [];
+    final parents = _topics.where((t) => t['parent_id'] == null).toList();
+    for (var p in parents) {
+      visualTopics.add(p);
+      visualTopics.addAll(_topics.where((t) => t['parent_id'] == p['id']));
+    }
+
+    final currentIndex = visualTopics.indexOf(topic);
+    final prevTopic = currentIndex > 0 ? visualTopics[currentIndex - 1] : null;
+    final nextTopic =
+        currentIndex >= 0 && currentIndex < visualTopics.length - 1
+        ? visualTopics[currentIndex + 1]
+        : null;
+
     return SingleChildScrollView(
       controller: _contentScrollController,
       padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 64),
@@ -453,6 +537,78 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   child: _buildSectionItem(s, isDark),
                 );
               }).toList(),
+
+              const SizedBox(height: 64),
+              // Prev / Next Navigation
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  prevTopic != null
+                      ? InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedTopicIndex = _topics.indexOf(prevTopic);
+                              _activeSectionId = null;
+                            });
+                            if (_contentScrollController.hasClients) {
+                              _contentScrollController.jumpTo(0);
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.chevron_left,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                prevTopic['title'],
+                                style: GoogleFonts.poppins(
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black87,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox(),
+                  nextTopic != null
+                      ? InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedTopicIndex = _topics.indexOf(nextTopic);
+                              _activeSectionId = null;
+                            });
+                            if (_contentScrollController.hasClients) {
+                              _contentScrollController.jumpTo(0);
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              Text(
+                                nextTopic['title'],
+                                style: GoogleFonts.poppins(
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black87,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.chevron_right,
+                                color: isDark ? Colors.white70 : Colors.black87,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox(),
+                ],
+              ),
 
               const SizedBox(height: 100),
             ],
@@ -545,8 +701,14 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
   Widget _buildMediaPreview(String? url, bool isVideo, String? title) {
     if (url == null) return const SizedBox.shrink();
+
+    String fullUrl = url;
+    if (!url.startsWith('http')) {
+      fullUrl = '${CommonData.backendUrl}$url';
+    }
+
     if (isVideo) {
-      return UnifiedVideoPlayer(url: url, title: title, height: 400);
+      return UnifiedVideoPlayer(url: fullUrl, title: title, height: 400);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,15 +725,13 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             ),
           ),
         Container(
-          height: 400,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: Colors.black,
-            image: DecorationImage(
-              image: NetworkImage(url),
-              fit: BoxFit.contain,
-              opacity: 0.8,
-            ),
+            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: Image.network(fullUrl, fit: BoxFit.contain),
           ),
         ),
       ],
@@ -606,6 +766,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Widget _buildTOCItem(dynamic section, bool isDark) {
+    final isActive = _activeSectionId == section['id'];
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -613,8 +774,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         child: Text(
           section['title'],
           style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: Colors.grey[600],
+            fontSize: isActive ? 13 : 12,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+            color: isActive ? XRDockTheme.primaryPurple : Colors.grey[600],
             height: 1.4,
           ),
         ),
@@ -733,7 +895,9 @@ class _VideoGalleryWidgetState extends State<_VideoGalleryWidget> {
                             image: DecorationImage(
                               image: NetworkImage(
                                 item['thumbnail']?.isNotEmpty == true
-                                    ? item['thumbnail']
+                                    ? (item['thumbnail'].startsWith('http')
+                                          ? item['thumbnail']
+                                          : '${CommonData.backendUrl}${item['thumbnail']}')
                                     : _getYouTubeThumbnail(item['url']),
                               ),
                               fit: BoxFit.cover,
@@ -798,17 +962,29 @@ class _ImageGalleryWidget extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
+        final isDataUri = item['url'].toString().startsWith('data:');
+        final isHttp = item['url'].toString().startsWith('http');
+        final fullUrl = isDataUri || isHttp
+            ? item['url']
+            : '${CommonData.backendUrl}${item['url']}';
+
+        // Provide memory or network image based on Data URI.
+        final ImageProvider imageProvider = isDataUri
+            ? MemoryImage(base64Decode(item['url'].toString().split(',').last))
+            : NetworkImage(fullUrl) as ImageProvider;
+
         return InkWell(
           onTap: () {
-            // Preview image
+            showDialog(
+              context: context,
+              builder: (context) =>
+                  _ImageGalleryViewer(items: items, initialIndex: index),
+            );
           },
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: NetworkImage(_getYouTubeThumbnail(item['url'])),
-                fit: BoxFit.cover,
-              ),
+              image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
             ),
             child: Container(
               decoration: BoxDecoration(
@@ -833,6 +1009,173 @@ class _ImageGalleryWidget extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ImageGalleryViewer extends StatefulWidget {
+  final List<dynamic> items;
+  final int initialIndex;
+
+  const _ImageGalleryViewer({required this.items, required this.initialIndex});
+
+  @override
+  State<_ImageGalleryViewer> createState() => _ImageGalleryViewerState();
+}
+
+class _ImageGalleryViewerState extends State<_ImageGalleryViewer> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  ImageProvider _getImageProvider(dynamic item) {
+    final isDataUri = item['url'].toString().startsWith('data:');
+    final isHttp = item['url'].toString().startsWith('http');
+    final fullUrl = isDataUri || isHttp
+        ? item['url']
+        : '${CommonData.backendUrl}${item['url']}';
+
+    if (isDataUri) {
+      return MemoryImage(base64Decode(item['url'].toString().split(',').last));
+    }
+    return NetworkImage(fullUrl);
+  }
+
+  void _nextPage() {
+    if (_currentIndex < widget.items.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _prevPage() {
+    if (_currentIndex > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      surfaceTintColor: Colors
+          .transparent, // Prevents white tint overlay on transparent background
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 700),
+            child: PageView.builder(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              itemCount: widget.items.length,
+              itemBuilder: (context, index) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image(
+                    image: _getImageProvider(widget.items[index]),
+                    fit: BoxFit.contain,
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Left Arrow
+          if (_currentIndex > 0)
+            Positioned(
+              left: 0,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black45,
+                  padding: const EdgeInsets.all(12),
+                ),
+                onPressed: _prevPage,
+              ),
+            ),
+
+          // Right Arrow
+          if (_currentIndex < widget.items.length - 1)
+            Positioned(
+              right: 0,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black45,
+                  padding: const EdgeInsets.all(12),
+                ),
+                onPressed: _nextPage,
+              ),
+            ),
+
+          // Close Button (Fixed positioning outside of image boundary but inside dialog Stack)
+          Positioned(
+            top: -16,
+            right: -16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.all(8),
+              ),
+              tooltip: 'Close',
+            ),
+          ),
+
+          // Image Counter (Bottom Center)
+          Positioned(
+            bottom: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_currentIndex + 1} / ${widget.items.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

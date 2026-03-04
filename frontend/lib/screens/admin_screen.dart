@@ -65,7 +65,19 @@ class _AdminScreenState extends State<AdminScreen>
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Delete'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Confirm Delete'),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(ctx, false),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
+        ),
         content: const Text('Are you sure you want to delete this record?'),
         actions: [
           TextButton(
@@ -109,7 +121,19 @@ class _AdminScreenState extends State<AdminScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit User: ${user['email']}'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Edit User: ${user['email']}'),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(ctx),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -178,7 +202,19 @@ class _AdminScreenState extends State<AdminScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit Project'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Edit Project'),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(ctx),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -234,7 +270,19 @@ class _AdminScreenState extends State<AdminScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
-          title: const Text('Edit Issue'),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Edit Issue'),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.red),
+                onPressed: () => Navigator.pop(ctx),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 20,
+              ),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,

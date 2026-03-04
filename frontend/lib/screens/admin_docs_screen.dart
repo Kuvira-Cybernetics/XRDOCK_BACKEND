@@ -524,9 +524,21 @@ class _TopicEditDialogState extends State<_TopicEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(
-        widget.topic == null ? 'NEW TOPIC' : 'EDIT TOPIC',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            widget.topic == null ? 'NEW TOPIC' : 'EDIT TOPIC',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.red),
+            onPressed: () => Navigator.pop(context),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            splashRadius: 20,
+          ),
+        ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -687,7 +699,7 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           setState(() {
-            _mediaUrlController.text = data['url'];
+            _mediaUrlController.text = '${CommonData.backendUrl}${data['url']}';
           });
         }
       } catch (e) {
@@ -775,9 +787,21 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
     }
 
     return AlertDialog(
-      title: Text(
-        widget.section == null ? 'NEW SECTION' : 'EDIT SECTION',
-        style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            widget.section == null ? 'NEW SECTION' : 'EDIT SECTION',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.red),
+            onPressed: () => Navigator.pop(context),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            splashRadius: 20,
+          ),
+        ],
       ),
       content: SizedBox(
         width: 500,
@@ -881,16 +905,36 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
                     ),
                     if (_mediaUrlController.text.isNotEmpty)
                       IconButton(
-                        icon: const Icon(
-                          Icons.play_circle_fill,
+                        icon: Icon(
+                          _type == 'video'
+                              ? Icons.play_circle_fill
+                              : Icons.image_rounded,
                           color: Colors.green,
                         ),
-                        tooltip: 'Preview Media',
+                        tooltip: _type == 'video'
+                            ? 'Preview Video'
+                            : 'Preview Image',
                         onPressed: () {
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: const Text('MEDIA PREVIEW'),
+                              title: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('MEDIA PREVIEW'),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () => Navigator.pop(context),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    splashRadius: 20,
+                                  ),
+                                ],
+                              ),
                               content: SizedBox(
                                 width: 600,
                                 child: _type == 'video'
@@ -899,20 +943,23 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
                                         title: null,
                                         height: 350,
                                       )
-                                    : Image.network(
-                                        _mediaUrlController.text.startsWith(
-                                              'http',
+                                    : (_mediaUrlController.text.startsWith(
+                                            'data:',
+                                          )
+                                          ? Image.memory(
+                                              base64Decode(
+                                                _mediaUrlController.text
+                                                    .split(',')
+                                                    .last,
+                                              ),
                                             )
-                                            ? _mediaUrlController.text
-                                            : '${CommonData.backendUrl}${_mediaUrlController.text}',
-                                      ),
+                                          : Image.network(
+                                              _mediaUrlController.text
+                                                      .startsWith('http')
+                                                  ? _mediaUrlController.text
+                                                  : '${CommonData.backendUrl}${_mediaUrlController.text}',
+                                            )),
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('CLOSE'),
-                                ),
-                              ],
                             ),
                           );
                         },
@@ -1093,8 +1140,10 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
                               tooltip: 'Remove Item',
                             ),
                             IconButton(
-                              icon: const Icon(
-                                Icons.play_circle_fill_rounded,
+                              icon: Icon(
+                                _type == 'image_gallery'
+                                    ? Icons.image_rounded
+                                    : Icons.play_circle_fill_rounded,
                                 color: Colors.green,
                                 size: 22,
                               ),
@@ -1102,18 +1151,56 @@ class _SectionEditDialogState extends State<_SectionEditDialog> {
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: const Text('GALLERY PREVIEW'),
+                                    title: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('GALLERY PREVIEW'),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.close,
+                                            color: Colors.red,
+                                          ),
+                                          onPressed: () =>
+                                              Navigator.pop(context),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          splashRadius: 20,
+                                        ),
+                                      ],
+                                    ),
                                     content: SizedBox(
                                       width: 600,
                                       height: 400,
-                                      child: UnifiedVideoPlayer(
-                                        url: item['url'],
-                                      ),
+                                      child: _type == 'image_gallery'
+                                          ? (item['url'].toString().startsWith(
+                                                  'data:',
+                                                )
+                                                ? Image.memory(
+                                                    base64Decode(
+                                                      item['url']
+                                                          .toString()
+                                                          .split(',')
+                                                          .last,
+                                                    ),
+                                                  )
+                                                : Image.network(
+                                                    item['url']
+                                                            .toString()
+                                                            .startsWith('http')
+                                                        ? item['url']
+                                                        : '${CommonData.backendUrl}${item['url']}',
+                                                  ))
+                                          : UnifiedVideoPlayer(
+                                              url: item['url'],
+                                            ),
                                     ),
                                   ),
                                 );
                               },
-                              tooltip: 'Preview Video',
+                              tooltip: _type == 'image_gallery'
+                                  ? 'Preview Image'
+                                  : 'Preview Video',
                             ),
                           ],
                         ),

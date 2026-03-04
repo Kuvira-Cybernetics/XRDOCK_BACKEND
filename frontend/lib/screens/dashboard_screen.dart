@@ -345,7 +345,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bool isDark = Theme.of(context).brightness == Brightness.dark;
         return AlertDialog(
           backgroundColor: isDark ? const Color(0xFF1E2328) : Colors.white,
-          title: const Text('Download XR-DOCK'),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Download XR-DOCK'),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.red),
+                onPressed: () => Navigator.pop(ctx),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                splashRadius: 20,
+              ),
+            ],
+          ),
           content: SizedBox(
             width: 400,
             child: Column(
@@ -2024,7 +2036,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Delete'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Confirm Delete'),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(ctx, false),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
+        ),
         content: Text(
           'Are you sure you want to delete project "$name" from Cloud?',
         ),

@@ -714,7 +714,24 @@ class _AutodeskFileBrowserState extends State<AutodeskFileBrowser> {
                                   final confirmed = await showDialog<bool>(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
-                                      title: const Text('Confirm Delete'),
+                                      title: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text('Confirm Delete'),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.close,
+                                              color: Colors.red,
+                                            ),
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, false),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            splashRadius: 20,
+                                          ),
+                                        ],
+                                      ),
                                       content: Text(
                                         'Are you sure you want to delete this ${isFolder ? 'folder' : 'file'}?',
                                       ),

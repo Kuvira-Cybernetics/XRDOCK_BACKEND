@@ -62,9 +62,21 @@ class _MainLayoutState extends State<MainLayout> {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(
-          'LOGOUT',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'LOGOUT',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () => Navigator.pop(context, false),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 20,
+            ),
+          ],
         ),
         content: const Text('Are you sure you want to log out?'),
         actions: [

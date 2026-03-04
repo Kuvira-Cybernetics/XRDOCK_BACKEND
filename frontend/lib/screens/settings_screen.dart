@@ -344,8 +344,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             showDialog(
                                               context: context,
                                               builder: (ctx) => AlertDialog(
-                                                title: const Text(
-                                                  'Select Default Upload Folder',
+                                                title: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    const Text(
+                                                      'Select Default Upload Folder',
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                        Icons.close,
+                                                        color: Colors.red,
+                                                      ),
+                                                      onPressed: () =>
+                                                          Navigator.pop(ctx),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(),
+                                                      splashRadius: 20,
+                                                    ),
+                                                  ],
                                                 ),
                                                 content: SizedBox(
                                                   width: 600,
