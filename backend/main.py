@@ -2054,19 +2054,71 @@ async def contact_sales(request: ContactRequest):
     
     # Send email
     try:
-        recipients = ["arulbabu@kuvira.in", request.email]
+        from email.mime.image import MIMEImage
+        from email_templates import get_sales_notification_email_html, get_customer_confirmation_email_html
+        import os
         
-        msg = MIMEMultipart()
-        msg['From'] = "tarunpeter221@gmail.com"
-        msg['To'] = ", ".join(recipients)
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+        # Load logo for embedding
+        logo_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "assets", "images", "logo.png")
+        try:
+            with open(logo_path, "rb") as f:
+                logo_data = f.read()
+        except FileNotFoundError:
+            # Fallback if logo not found
+            logo_data = b""
+            
+        sales_recipient = "arulbabu@kuvira.in"
         
+        # --- 1. Construct Sales Notification Email ---
+        sales_msg = MIMEMultipart('alternative')
+        sales_msg['From'] = "tarunpeter221@gmail.com"
+        sales_msg['To'] = sales_recipient
+        sales_msg['Subject'] = subject
+        
+        # Attach plain text
+        sales_msg.attach(MIMEText(body, 'plain'))
+        
+        # HTML with embedded image
+        sales_related = MIMEMultipart('related')
+        sales_msg.attach(sales_related)
+        
+        sales_html_body = get_sales_notification_email_html(request.name, request.email, request.message)
+        sales_related.attach(MIMEText(sales_html_body, 'html'))
+        
+        if logo_data:
+            logo_img_sales = MIMEImage(logo_data)
+            logo_img_sales.add_header('Content-ID', '<xrdock_logo>')
+            logo_img_sales.add_header('Content-Disposition', 'inline', filename='logo.png')
+            sales_related.attach(logo_img_sales)
+        
+        # --- 2. Construct Customer Confirmation Email ---
+        cust_msg = MIMEMultipart('alternative')
+        cust_msg['From'] = "tarunpeter221@gmail.com"
+        cust_msg['To'] = request.email
+        cust_msg['Subject'] = "Thank you for contacting XR-DOCK"
+        
+        cust_body_plain = f"Hello {request.name},\n\nThank you for approaching us. Our team will contact you shortly.\n\nBest Regards,\nThe XR-DOCK Team"
+        cust_msg.attach(MIMEText(cust_body_plain, 'plain'))
+        
+        cust_related = MIMEMultipart('related')
+        cust_msg.attach(cust_related)
+        
+        cust_html_body = get_customer_confirmation_email_html(request.name)
+        cust_related.attach(MIMEText(cust_html_body, 'html'))
+        
+        if logo_data:
+            logo_img_cust = MIMEImage(logo_data)
+            logo_img_cust.add_header('Content-ID', '<xrdock_logo>')
+            logo_img_cust.add_header('Content-Disposition', 'inline', filename='logo.png')
+            cust_related.attach(logo_img_cust)
+        
+        # --- Send Emails ---
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login("tarunpeter221@gmail.com", "rckrctvuvjxfyjzb")
-            server.send_message(msg)
-        
+            server.send_message(sales_msg)
+            server.send_message(cust_msg)
+            
         return {"status": "success", "message": "Contact request sent successfully. We will get back to you soon!"}
     except Exception as e:
         print(f"Failed to send email: {e}")
