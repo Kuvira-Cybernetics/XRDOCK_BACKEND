@@ -2069,9 +2069,12 @@ async def contact_sales(request: ContactRequest):
             
         sales_recipient = "arulbabu@kuvira.in"
         
+        smtp_email = os.getenv("SMTP_EMAIL", "contactbillzbee@gmail.com")
+        smtp_password = os.getenv("SMTP_PASSWORD", "baztaokssqzudaql")
+        
         # --- 1. Construct Sales Notification Email ---
         sales_msg = MIMEMultipart('alternative')
-        sales_msg['From'] = "tarunpeter221@gmail.com"
+        sales_msg['From'] = smtp_email
         sales_msg['To'] = sales_recipient
         sales_msg['Subject'] = subject
         
@@ -2093,7 +2096,7 @@ async def contact_sales(request: ContactRequest):
         
         # --- 2. Construct Customer Confirmation Email ---
         cust_msg = MIMEMultipart('alternative')
-        cust_msg['From'] = "tarunpeter221@gmail.com"
+        cust_msg['From'] = smtp_email
         cust_msg['To'] = request.email
         cust_msg['Subject'] = "Thank you for contacting XR-DOCK"
         
@@ -2115,7 +2118,7 @@ async def contact_sales(request: ContactRequest):
         # --- Send Emails ---
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
-            server.login("tarunpeter221@gmail.com", "rckrctvuvjxfyjzb")
+            server.login(smtp_email, smtp_password)
             server.send_message(sales_msg)
             server.send_message(cust_msg)
             
