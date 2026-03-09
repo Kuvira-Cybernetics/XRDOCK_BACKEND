@@ -379,9 +379,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       final filename = v['filename'] as String;
                       final size = _formatFileSize(v['size'] as int);
 
+                      IconData getIconForFile(String filename) {
+                        final ext = filename.split('.').last.toLowerCase();
+                        if (ext == 'zip' || ext == 'rar' || ext == '7z') {
+                          return Icons.archive_outlined;
+                        } else if (ext == 'exe' || ext == 'msi') {
+                          return Icons.install_desktop_outlined;
+                        } else if (ext == 'pdf') {
+                          return Icons.picture_as_pdf_outlined;
+                        } else if (ext == 'png' ||
+                            ext == 'jpg' ||
+                            ext == 'jpeg') {
+                          return Icons.image_outlined;
+                        }
+                        return Icons.insert_drive_file_outlined;
+                      }
+
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.archive_outlined),
+                        leading: Icon(getIconForFile(filename)),
                         title: Text(
                           filename,
                           style: const TextStyle(fontWeight: FontWeight.w600),

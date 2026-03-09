@@ -425,8 +425,8 @@ async def list_app_versions():
     
     versions = []
     for f in os.listdir(directory):
-        if f.lower().endswith(".zip"):
-            file_path = os.path.join(directory, f)
+        file_path = os.path.join(directory, f)
+        if os.path.isfile(file_path):
             stats = os.stat(file_path)
             versions.append({
                 "filename": f,
@@ -451,12 +451,17 @@ async def download_app(filename: Optional[str] = None):
         target_path = zip_path
 
     if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail="App ZIP file not found")
+        raise HTTPException(status_code=404, detail="Requested file not found")
     
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(target_path)
+    if not content_type:
+        content_type = "application/octet-stream"
+
     return FileResponse(
         path=target_path,
         filename=os.path.basename(target_path),
-        media_type="application/zip",
+        media_type=content_type,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, OPTIONS",
