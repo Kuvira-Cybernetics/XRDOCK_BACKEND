@@ -536,6 +536,102 @@ async def check_auth_provider(email: str, session: AsyncSession = Depends(get_se
     print(f"DEBUG: Defaulting to 'password' for {email}")
     return {"provider": "password"}
 
+class GoogleCodeExchange(BaseModel):
+    code: str
+    redirect_uri: str
+
+@app.post("/auth/google/exchange")
+async def exchange_google_code(
+    request_data: GoogleCodeExchange,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Exchange a Google authorization code for a session token.
+    Fetches real user info from Google APIs.
+    """
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="Google OAuth credentials not configured in .env")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. Exchange code for access token
+            token_resp = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "code": request_data.code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": request_data.redirect_uri
+                }
+            )
+            
+            if token_resp.status_code != 200:
+                print(f"Google Token Exchange Error: {token_resp.text}")
+                raise HTTPException(status_code=400, detail="Failed to exchange Google code")
+            
+            token_data = token_resp.json()
+            access_token = token_data.get("access_token")
+            
+            # 2. Get User Info
+            user_info_resp = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if user_info_resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to retrieve Google user info")
+            
+            google_user = user_info_resp.json()
+            email = google_user.get("email")
+            name = google_user.get("name", "Google User")
+            picture = google_user.get("picture")
+            
+            if not email:
+                raise HTTPException(status_code=400, detail="Email not provided by Google")
+
+            # 3. Find or create user in DB
+            uid = f"google:{email}" # Unique ID for Google users
+            
+            result = await session.execute(select(User).where(User.uid == uid))
+            db_user = result.scalar_one_or_none()
+            
+            if not db_user:
+                # Fallback check by email (optional, depends on policy)
+                result = await session.execute(select(User).where(User.email == email))
+                db_user = result.scalar_one_or_none()
+                
+            if not db_user:
+                db_user = User(uid=uid, email=email, name=name, profile_image=picture)
+                session.add(db_user)
+            else:
+                # Update existing user info
+                db_user.name = name
+                db_user.profile_image = picture
+                session.add(db_user)
+            
+            await session.commit()
+            await session.refresh(db_user)
+
+            # 4. Generate symmetric JWT (Match dependencies.py fallback)
+            jwt_secret = os.getenv("JWT_SECRET", "xrdock_secret_key_2024")
+            session_token = jwt.encode({
+                "uid": db_user.uid,
+                "email": db_user.email,
+                "exp": datetime.now(timezone.utc) + timedelta(days=7)
+            }, jwt_secret, algorithm="HS256")
+            
+            print(f"Google Login Success: {email}")
+            return {"token": session_token}
+
+    except Exception as e:
+        print(f"Google OAuth full-flow error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Autodesk Auth Endpoints ---
 
 @app.get("/auth/autodesk/login")
