@@ -11,29 +11,115 @@ from tkinter import filedialog
 from server_logic import app, update_config
 import pystray
 from pystray import MenuItem as item
+import datetime
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
+
     return os.path.join(base_path, relative_path)
 
+def generate_self_signed_cert(cert_path, key_path, local_ip=None):
+    """Generates a self-signed certificate with Local IP support if it doesn't exist."""
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return
+
+    # Generate private key
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    
+    # Generate certificate
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, u"California"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, u"San Francisco"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"XRDOCK"),
+        x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+    ])
+    
+    # Add SANs (Subject Alternative Names) for localhost and Local IP
+    alt_names = [
+        x509.DNSName(u"localhost"),
+        x509.DNSName(u"127.0.0.1"),
+    ]
+    if local_ip:
+        try:
+            # Add as both DNS and IP if it looks like an IP
+            alt_names.append(x509.DNSName(str(local_ip)))
+            import ipaddress
+            alt_names.append(x509.IPAddress(ipaddress.ip_address(local_ip)))
+        except:
+            pass
+
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).not_valid_after(
+        # Valid for 10 years
+        datetime.datetime.utcnow() + datetime.timedelta(days=3650)
+    ).add_extension(
+        x509.SubjectAlternativeName(alt_names),
+        critical=False,
+    ).sign(key, hashes.SHA256())
+        # Valid for 10 years
+        datetime.datetime.utcnow() + datetime.timedelta(days=3650)
+    ).add_extension(
+        x509.SubjectAlternativeName([
+            x509.DNSName(u"localhost"),
+            x509.DNSName(u"127.0.0.1"),
+        ]),
+        critical=False,
+    ).sign(key, hashes.SHA256())
+
+    # Write key
+    with open(key_path, "wb") as f:
+        f.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+        
+    # Write cert
+    with open(cert_path, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
 class ServerThread(threading.Thread):
-    def __init__(self, port, host="0.0.0.0"):
+    def __init__(self, port, host="0.0.0.0", ssl_cert=None, ssl_key=None):
         threading.Thread.__init__(self)
         self.port = port
         self.host = host
         self.daemon = True
-        self.config = uvicorn.Config(
-            app=app, 
-            host=self.host, 
-            port=self.port, 
-            log_level="info",
-            log_config=None # Disable default logging config to avoid EXE formatter errors
-        )
+        
+        config_kwargs = {
+            "app": app,
+            "host": self.host,
+            "port": self.port,
+            "log_level": "info",
+            "log_config": None
+        }
+        
+        if ssl_cert and ssl_key:
+            config_kwargs["ssl_certfile"] = ssl_cert
+            config_kwargs["ssl_keyfile"] = ssl_key
+            
+        self.config = uvicorn.Config(**config_kwargs)
         self.server = uvicorn.Server(self.config)
 
     def run(self):
@@ -160,7 +246,7 @@ class FileServerApp(ctk.CTk):
         url_container = ctk.CTkFrame(self.info_frame, fg_color="transparent")
         url_container.pack(pady=5)
 
-        self.url_label = ctk.CTkLabel(url_container, text="ACCESS URL: http://0.0.0.0:8000", 
+        self.url_label = ctk.CTkLabel(url_container, text="ACCESS URL: https://0.0.0.0:8000", 
                                       font=("Inter", 15, "bold"), text_color=self.accent_color, cursor="hand2")
         self.url_label.pack(side="left")
 
@@ -216,7 +302,7 @@ class FileServerApp(ctk.CTk):
         
         port = self.port_entry.get()
         self.ip_label.configure(text=f"LOCAL IP: {ip}")
-        self.url_label.configure(text=f"ACCESS URL: http://{ip}:{port}")
+        self.url_label.configure(text=f"ACCESS URL: https://{ip}:{port}")
         return ip, port
 
     def log(self, message):
@@ -241,7 +327,29 @@ class FileServerApp(ctk.CTk):
                 
             update_config(path)
             
-            self.server_thread = ServerThread(port)
+            # Setup SSL
+            base_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else __file__)
+            
+            # Prioritize mkcert filenames if they exist
+            mkcert_cert = os.path.join(base_dir, "localhost+2.pem")
+            mkcert_key = os.path.join(base_dir, "localhost+2-key.pem")
+            
+            if os.path.exists(mkcert_cert) and os.path.exists(mkcert_key):
+                cert_path, key_path = mkcert_cert, mkcert_key
+                self.log("USING MKCERT SSL CERTIFICATES.")
+            else:
+                # Fallback to auto-generated ones with same filenames for consistency
+                cert_path, key_path = mkcert_cert, mkcert_key
+                try:
+                    ip, _ = self.update_ip_display()
+                    generate_self_signed_cert(cert_path, key_path, local_ip=ip)
+                    self.log("AUTO-GENERATED SSL READY.")
+                except Exception as ssl_err:
+                    self.log(f"SSL GEN ERROR: {ssl_err}")
+                    cert_path = None
+                    key_path = None
+                
+            self.server_thread = ServerThread(port, ssl_cert=cert_path, ssl_key=key_path)
             self.server_thread.start()
             
             self.is_running = True
@@ -303,7 +411,23 @@ def run_headless(port, path):
         os.makedirs(path, exist_ok=True)
     
     update_config(path)
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=port, log_level="info")
+    
+    # Setup SSL
+    base_dir = os.getcwd()
+    cert_path = os.path.join(base_dir, "localhost+2.pem")
+    key_path = os.path.join(base_dir, "localhost+2-key.pem")
+    
+    if not (os.path.exists(cert_path) and os.path.exists(key_path)):
+        generate_self_signed_cert(cert_path, key_path)
+    
+    config = uvicorn.Config(
+        app=app, 
+        host="0.0.0.0", 
+        port=port, 
+        log_level="info",
+        ssl_certfile=cert_path,
+        ssl_keyfile=key_path
+    )
     server = uvicorn.Server(config)
     server.run()
 
