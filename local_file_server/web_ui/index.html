@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XRDOCK | Local File Server</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #060918;
+            --card-bg: rgba(11, 18, 33, 0.8);
+            --accent-color: #00F2FF;
+            --secondary-accent: #7F00FF;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(0, 242, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(127, 0, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(0, 242, 255, 0.1) 0%, transparent 50%);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 28px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+        }
+
+        header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00F2FF 0%, #7F00FF 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(0, 242, 255, 0.05);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            color: var(--accent-color);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(0, 242, 255, 0.2);
+            border-radius: 20px;
+            padding: 50px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            margin-bottom: 35px;
+            background: rgba(0, 242, 255, 0.02);
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent-color);
+            background: rgba(0, 242, 255, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px rgba(0, 242, 255, 0.2);
+        }
+
+        .file-list {
+            list-style: none;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 16px;
+            margin-bottom: 16px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .file-item:hover {
+            border-color: rgba(0, 242, 255, 0.2);
+            background: rgba(255, 255, 255, 0.04);
+            transform: scale(1.01);
+        }
+
+        .file-icon {
+            font-size: 1.8rem;
+            margin-right: 20px;
+            filter: drop-shadow(0 0 10px rgba(0, 242, 255, 0.3));
+        }
+
+        .file-info {
+            flex-grow: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .file-meta {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.9rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, #00F2FF 0%, #00d2ff 100%);
+            color: #060918;
+            box-shadow: 0 4px 15px -5px rgba(0, 242, 255, 0.4);
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px -5px rgba(0, 242, 255, 0.6);
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-delete:hover {
+            background: #ef4444;
+            color: white;
+            box-shadow: 0 4px 15px -5px rgba(239, 68, 68, 0.4);
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>XRDOCK File Server</h1>
+            <div class="status-badge">● System Online</div>
+        </header>
+
+        <div class="upload-zone" id="dropZone">
+            <p>Drag & drop files here or <strong>click to upload</strong></p>
+            <input type="file" id="fileInput" multiple>
+        </div>
+
+        <div id="fileListContainer">
+            <div class="loading">Fetching files...</div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileListContainer = document.getElementById('fileListContainer');
+
+        // Fetch files
+        async function fetchFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const files = await response.json();
+                renderFiles(files);
+            } catch (err) {
+                fileListContainer.innerHTML = '<div class="loading">Error loading files.</div>';
+            }
+        }
+
+        function renderFiles(files) {
+            if (files.length === 0) {
+                fileListContainer.innerHTML = '<div class="loading">No files in the directory.</div>';
+                return;
+            }
+
+            const html = files.map(file => `
+                <div class="file-item">
+                    <div class="file-icon">${file.is_dir ? '📁' : '📄'}</div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-meta">${(file.size / 1024 / 1024).toFixed(2)} MB • ${file.modified}</div>
+                    </div>
+                    <div class="actions">
+                        <a href="/api/download/${file.name}" class="btn btn-download" download>Download</a>
+                        <button onclick="deleteFile('${file.name}')" class="btn btn-delete">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+            fileListContainer.innerHTML = html;
+        }
+
+        // Upload functionality
+        dropZone.onclick = () => fileInput.click();
+
+        fileInput.onchange = (e) => uploadFiles(e.target.files);
+
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        };
+
+        dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            uploadFiles(e.dataTransfer.files);
+        };
+
+        async function uploadFiles(files) {
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } catch (err) {
+                    alert('Upload failed for ' + file.name);
+                }
+            }
+            fetchFiles();
+        }
+
+        async function deleteFile(name) {
+            if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+            
+            try {
+                await fetch(`/api/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                fetchFiles();
+            } catch (err) {
+                alert('Delete failed');
+            }
+        }
+
+        fetchFiles();
+        // Refresh every 5 seconds
+        setInterval(fetchFiles, 5000);
+    </script>
+</body>
+</html>

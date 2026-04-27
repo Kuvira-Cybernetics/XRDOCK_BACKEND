@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+customtkinter
+python-multipart
+Pillow
+pyinstaller
+pystray
